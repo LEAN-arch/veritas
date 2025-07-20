@@ -14,6 +14,11 @@ def create_mock_hplc_data(num_samples=250, drift=True):
     # Base data generation
     data = {
         'sample_id': [f'SMP-{1000+i}' for i in range(num_samples)],
+        # CORRECTED: Added the 'batch_id' column that was missing.
+        'batch_id': np.random.choice(
+            ['B01-A', 'B01-B', 'B02-A', 'B02-B', 'B03-A'],
+            size=num_samples
+        ),
         'study_id': np.random.choice(
             ['VX-809-PK-01', 'VX-561-Tox-03', 'VX-121-Stab-02', 'VX-984-Form-05'], 
             size=num_samples, 
@@ -35,41 +40,28 @@ def create_mock_hplc_data(num_samples=250, drift=True):
     }
     df = pd.DataFrame(data)
 
-    # Introduce long-term instrument drift for HPLC-03 (a common real-world problem)
     if drift:
         hplc03_indices = df[df['instrument_id'] == 'HPLC-03'].index
         drift_factor = np.linspace(0, 0.35, len(hplc03_indices))
         df.loc[hplc03_indices, 'retention_time'] += drift_factor
 
-    # Introduce specific anomalies for QC rules and ML models to catch
-    df.loc[df.index[5], 'analyte_concentration'] = 180    # Obvious outlier
-    df.loc[df.index[10], 'analyte_concentration'] = -12   # Invalid value
-    df.loc[df.index[15], 'peak_area'] = np.nan            # Missing value
-    df.loc[df.index[25], 'peak_area'] = 7500              # Subtle ML Anomaly
-    df.loc[df.index[35], 'retention_time'] = 1.8          # Specification deviation
+    df.loc[df.index[5], 'analyte_concentration'] = 180
+    df.loc[df.index[10], 'analyte_concentration'] = -12
+    df.loc[df.index[15], 'peak_area'] = np.nan
+    df.loc[df.index[25], 'peak_area'] = 7500
+    df.loc[df.index[35], 'retention_time'] = 1.8
     
     return df
 
 def create_plate_heatmap_data():
-    """
-    Generates 96-well plate data with simulated edge effects, a common
-    experimental artifact in high-throughput screening.
-    """
+    """Generates 96-well plate data with simulated edge effects."""
     data = np.random.rand(8, 12) * 100 + 20
-    # Apply edge effect: outer rows/columns have lower values
-    data[0, :] -= 15
-    data[-1, :] -= 15
-    data[:, 0] -= 15
-    data[:, -1] -= 15
-    # Ensure data stays within a reasonable range
+    data[0, :] -= 15; data[-1, :] -= 15; data[:, 0] -= 15; data[:, -1] -= 15
     data = np.clip(data, 0, 150)
     return pd.DataFrame(data, index=[chr(65+i) for i in range(8)], columns=range(1, 13))
 
 def create_mock_audit_trail(num_entries=200):
-    """
-    Generates a rich, filterable audit trail that simulates various system
-    and user actions, compliant with 21 CFR Part 11 requirements.
-    """
+    """Generates a rich, filterable audit trail."""
     users = ['DTE-System', 'A. Turing', 'R. Franklin', 'QA.Bot', 'M. Curie', 'S. Director', 'Admin']
     actions = ['File Ingested', 'QC Rule Applied', 'Data Point Flagged', 'Discrepancy Resolved', 'Report Generated', 'E-Signature Applied', 'User Login', 'Data Exported', 'Permission Changed']
     records = [f'SMP-{np.random.randint(1000, 1250)}' for _ in range(num_entries)]
