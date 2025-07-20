@@ -46,7 +46,8 @@ def apply_qc_rules(df: pd.DataFrame, rules_config: dict, app_config: dict) -> pd
     if rules_config.get('check_spec_limits', False):
         # Example check for 'Main Impurity'
         cqa_to_check = 'Main Impurity'
-        specs = app_config.get('process_capability', {}).get('spec_limits', {}).get(cqa_to_check)
+        spec_limits_all = app_config.get('process_capability', {}).get('spec_limits', {})
+        specs = spec_limits_all.get(cqa_to_check)
         
         if specs and cqa_to_check in df.columns:
             lsl = specs.get('LSL')
@@ -60,7 +61,8 @@ def apply_qc_rules(df: pd.DataFrame, rules_config: dict, app_config: dict) -> pd
                 oor_conditions.append(df[cqa_to_check] > usl)
             
             if oor_conditions:
-                oor_mask = np.logical_or.reduce(oor_conditions)
+                # Combine conditions with OR logic
+                oor_mask = pd.concat(oor_conditions, axis=1).any(axis=1)
                 oor_df = df[oor_mask]
                 
                 for _, row in oor_df.iterrows():
