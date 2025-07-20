@@ -1,6 +1,7 @@
 # pages/2_QC_&_Integrity_Center.py
 import streamlit as st
 import pandas as pd
+import time  # <-- ADDED
 from sklearn.ensemble import IsolationForest
 
 from utils.auth import display_compliance_footer, get_user_role
@@ -71,6 +72,9 @@ with col2:
         res_col3.metric("Discrepancies Found", total_issues)
         
         st.error(f"Found {total_issues} discrepancies. Flagged data has been sent to the QC Analyst Triage Queue.")
+        st.info("A detailed QC report has been generated and logged.")
+
+display_compliance_footer()Queue.")
         st.info("A detailed QC report has been generated and logged.")
 
 display_compliance_footer()
