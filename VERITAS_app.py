@@ -4,8 +4,13 @@ from utils.auth import get_user_role, display_compliance_footer
 from utils.data_generator import *
 from utils.plotters import *
 
-# --- Page Configuration: Must be the first Streamlit command ---
-st.set_page_config(page_title="VERITAS", page_icon="V_logo.png", layout="wide", initial_sidebar_state="expanded")
+# --- Page Configuration: CORRECTED ---
+st.set_page_config(
+    page_title="VERITAS",
+    page_icon="🧪",  # Using a standard emoji instead of a file
+    layout="wide",
+    initial_sidebar_state="expanded"
+)
 
 # --- Data Caching: Load all data once ---
 @st.cache_data
@@ -19,16 +24,18 @@ def load_all_data():
     }
 data = load_all_data()
 
-# --- Sidebar for Navigation and Controls ---
+# --- Sidebar for Navigation and Controls: CORRECTED ---
 with st.sidebar:
-    st.image("vertex-logo.png", width=200)
+    # st.image("vertex-logo.png", width=200) # This line is commented out
     st.title("VERITAS")
     st.caption("Vertex Ensured Reporting & Integrity Transformation Automation Suite")
     st.markdown("---")
     user_role = get_user_role()
     st.markdown("---")
     if st.button("Logout"):
-        st.experimental_rerun()
+        st.rerun() # Use st.rerun() for modern Streamlit versions
+
+# ... (the rest of the file remains the same) ...
 
 # --- Main Application Logic ---
 st.header(f"'{user_role}' Command Center")
