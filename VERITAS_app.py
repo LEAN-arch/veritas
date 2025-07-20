@@ -1,149 +1,165 @@
 # VERITAS_app.py
 import streamlit as st
 import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
 
-# Import the new foundational modules
-from utils import data_connector as dc
-from utils import auth
-from utils.plotters import (
-    plot_sankey_flow, 
-    plot_gantt_chart,
-    plot_pareto_chart
+# Import foundational modules for the main app
+from utils import auth, data_connector as dc, config
+from utils.plotters import plot_kpi_sankey, plot_gantt_chart, plot_pareto_chart
+
+# Import page-rendering functions from the new modular pages
+from pages import (
+    p1_process_capability_dashboard,
+    p2_stability_program_dashboard,
+    p3_regulatory_support,
+    p4_governance_audit_hub,
+    p5_deviation_hub
 )
 
-# --- Page Configuration: Must be the first command ---
+# --- 1. Application Setup: Called only once ---
 st.set_page_config(
     page_title="VERITAS Command Center",
     page_icon="🧪",
     layout="wide",
-    initial_sidebar_state="expanded"
+    initial_sidebar_state="expanded",
+    menu_items={
+        'Get Help': 'https://www.vertex.com/contact-us',
+        'About': f"VERITAS Command Center, Version {config.APP_CONFIG['app_version']}"
+    }
 )
 
-# --- PHASE 1: Enterprise Authentication ---
-# SME EXPLANATION: The entire application is now wrapped in an authentication check.
-# No data is loaded or displayed until the user successfully logs in. This is a
-# non-negotiable security feature for any enterprise application.
-user_role = auth.authenticate_user()
+# --- 2. Session Initialization and Data Loading ---
+# This block runs once per session to set up the environment.
+if 'session_initialized' not in st.session_state:
+    auth.initialize_session()
+    
+    # Store app config and DB connection in session state for universal access
+    st.session_state.db_connection = dc.connect_to_db({"database": "PROD_DATA_WAREHOUSE"})
+    st.session_state.app_config = dc.fetch_app_config(st.session_state.db_connection)
+    
+    # Initialize mutable data (deviations, audit log) into session state
+    dc.initialize_session_data()
 
-# --- PHASE 1: Data Architecture & Integration ---
-# SME EXPLANATION: We now simulate connecting to a database and fetching data and configuration
-# using the dedicated data_connector module. This architecture separates data access from the
-# presentation layer (the Streamlit app), which is a critical best practice.
-@st.cache_data(ttl=3600) # Cache the connection and config for 1 hour
-def load_initial_data():
-    """Connects to DB and fetches initial config and datasets."""
-    db_connection = dc.connect_to_db({"database": "PROD_DATA_WAREHOUSE"})
-    app_config = dc.fetch_app_config(db_connection)
-    hplc_data = dc.fetch_hplc_data(db_connection)
-    deviations_data = dc.fetch_deviations_data(db_connection)
-    return db_connection, app_config, hplc_data, deviations_data
+# --- 3. Render Universal UI Elements (Sidebar and Footer) ---
+auth.render_main_sidebar()
+auth.display_compliance_footer()
 
-db_connection, APP_CONFIG, hplc_df, deviations_df = load_initial_data()
-
-# --- Audit Log Entry for User Login ---
-# This ensures that the user's session start is captured for compliance.
-if 'login_audited' not in st.session_state:
+# --- 4. Centralized Audit Log for User Login ---
+if not st.session_state.get('login_audited', False):
     dc.write_to_audit_log(
-        db_connection,
+        st.session_state.db_connection,
         user=st.session_state.username,
         action="User Login",
-        details=f"User logged in and was assigned the '{user_role}' role view."
+        details=f"User logged in and was assigned the '{st.session_state.user_role}' role view."
     )
     st.session_state.login_audited = True
 
-# --- Main Application Header ---
-st.title("VERITAS Command Center")
-st.header(f"'{user_role}' View")
-st.markdown("---")
+# --- 5. Page Routing: Map page names to their render functions ---
+# This is a scalable way to manage a multi-page app.
+PAGE_ROUTER = {
+    "VERITAS Command Center": "render_main_dashboard", # Special case for the home page
+    "Process Capability Dashboard": p1_process_capability_dashboard.render_page,
+    "Stability Program Dashboard": p2_stability_program_dashboard.render_page,
+    "Regulatory Support": p3_regulatory_support.render_page,
+    "Governance & Audit Hub": p4_governance_audit_hub.render_page,
+    "Deviation Hub": p5_deviation_hub.render_page
+}
 
-# --- DTE LEADERSHIP VIEW ---
-if user_role == 'DTE Leadership':
+# --- Role-Based Page Access Control ---
+# Define which pages each role can see
+ROLE_PERMISSIONS = {
+    'DTE Leadership': list(PAGE_ROUTER.keys()),
+    'Study Director': ["VERITAS Command Center", "Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support", "Governance & Audit Hub"],
+    'Scientist': ["VERITAS Command Center", "Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support"],
+    'QC Analyst': ["VERITAS Command Center", "Process Capability Dashboard", "Deviation Hub", "Governance & Audit Hub"]
+}
+
+# --- Dynamic Page Links based on Role ---
+# This replaces the hardcoded page links
+st.sidebar.markdown("## Analytical Modules")
+user_role = st.session_state.user_role
+for page_name in ROLE_PERMISSIONS[user_role]:
+    if page_name != "VERITAS Command Center":
+        st.sidebar.page_link(f"pages/{page_name.lower().replace(' ', '_').replace('&', 'and')}.py", label=page_name)
+
+# --- Dashboard Rendering Functions (for the main page) ---
+def render_dte_view():
+    """Renders the main dashboard for DTE Leadership."""
     st.markdown("##### High-level overview of operational efficiency, program risk, and system health.")
     
-    # KPIs using data from the simulated database
+    # Load data dynamically
+    hplc_df = dc.fetch_hplc_data(st.session_state.db_connection)
+    deviations_df = dc.fetch_deviations_data()
+    gantt_df = dc.fetch_gantt_data(st.session_state.db_connection)
+    
+    # --- Dynamic KPIs ---
     kpi_cols = st.columns(4)
-    with kpi_cols[0]:
-        st.metric("Active Deviations", deviations_df[deviations_df['status'] != 'Closed'].shape[0], help="Total number of open deviation investigations.")
-    with kpi_cols[1]:
-        # Calculate Data Quality Score (DQS) based on a sample rule
-        dqs = 100 * (1 - (hplc_df['Purity'] < 98.0).mean())
-        st.metric("Data Quality Score (DQS)", f"{dqs:.1f}%", f"{((dqs/100)-0.95)*100:.1f}% vs Target", help="A composite score reflecting the percentage of data passing automated checks.")
-    with kpi_cols[2]:
-        st.metric("First Pass Yield (FPY)", "88.2%", "-1.5%", help="The percentage of data packages that pass all QC checks on the first attempt.")
-    with kpi_cols[3]:
-        st.metric("Mean Time to Resolution (MTTR)", "4.1 Hrs", "-0.5 Hrs", delta_color="inverse", help="Average time to investigate and close a data discrepancy ticket.")
+    active_deviations = deviations_df[deviations_df['status'] != 'Closed'].shape[0]
+    kpi_cols[0].metric("Active Deviations", active_deviations, help="Total number of open deviation investigations.")
+    
+    dqs = 100 * (1 - (hplc_df['Purity'] < 98.0).mean()) # Example DQS calculation
+    kpi_cols[1].metric("Data Quality Score (DQS)", f"{dqs:.1f}%", f"{((dqs/100)-0.95)*100:.1f}% vs Target", help="Percentage of data passing automated checks.")
+    
+    # Placeholder KPIs (would be calculated in a real scenario)
+    kpi_cols[2].metric("First Pass Yield (FPY)", "88.2%", "-1.5%")
+    kpi_cols[3].metric("Mean Time to Resolution (MTTR)", f"{active_deviations * 1.2:.1f} Hrs", "-0.5 Hrs", delta_color="inverse")
 
     st.markdown("---")
     
     col1, col2 = st.columns((6, 4))
     with col1:
         st.subheader("Data Package Velocity & Yield")
-        st.plotly_chart(plot_sankey_flow(), use_container_width=True)
+        sankey_data = {'ingested': len(hplc_df), 'passed': len(hplc_df[hplc_df['Purity'] >= 98.0]), 'failed': len(hplc_df[hplc_df['Purity'] < 98.0])}
+        st.plotly_chart(plot_kpi_sankey(sankey_data), use_container_width=True)
+
         st.subheader("Drug Program Timelines & Submission Risk")
-        gantt_data = pd.DataFrame([
-            dict(Program="VX-770 (CFTR)", Start='2023-01-15', Finish='2023-06-30', Status='Completed', Risk='Low'),
-            dict(Program="VX-809 (CFTR)", Start='2023-03-01', Finish='2023-09-15', Status='Completed', Risk='Low'),
-            dict(Program="VX-561 (AATD)", Start='2023-07-01', Finish='2024-01-20', Status='In Progress', Risk='Medium'),
-            dict(Program="VX-121 (Pain)", Start='2023-10-10', Finish='2024-05-30', Status='In Progress', Risk='High'),
-        ])
-        st.plotly_chart(plot_gantt_chart(gantt_data), use_container_width=True)
+        st.plotly_chart(plot_gantt_chart(gantt_df), use_container_width=True)
     with col2:
-        st.subheader("Active System & Data Alerts")
-        alert_df = pd.DataFrame([
-            {"Priority": "High", "Alert": "Instrument HPLC-03 drift exceeds threshold", "Owner": "QC Analyst"},
-            {"Priority": "Medium", "Alert": "Ingestion latency > 10 mins", "Owner": "DTE Ops"},
-            {"Priority": "Low", "Alert": "3 reports pending signature > 48h", "Owner": "S. Director"},
-        ])
-        st.dataframe(alert_df, use_container_width=True, hide_index=True)
-        st.subheader("QC Failure Hotspots")
-        error_data = pd.DataFrame(list({
-            'Out of Spec Result': 45, 'Missing Metadata': 22, 'Instrument Drift': 15,
-            'Invalid File Format': 8, 'Analyst Entry Error': 5
-        }.items()), columns=['Error Type', 'Frequency']).sort_values(by='Frequency', ascending=False)
-        st.plotly_chart(plot_pareto_chart(error_data), use_container_width=True)
+        st.subheader("QC Failure Hotspots (from Deviations)")
+        # This chart is now derived from the LIVE deviation data
+        if not deviations_df.empty:
+            error_data = pd.DataFrame(deviations_df['title'].str.extract(r'(OOS|Drift|Breach|Contamination|Missing)')[0].value_counts()).reset_index()
+            error_data.columns = ['Error Type', 'Frequency']
+            st.plotly_chart(plot_pareto_chart(error_data), use_container_width=True)
+        else:
+            st.info("No deviation data to generate Pareto chart.")
 
-# --- SCIENTIST / STUDY DIRECTOR VIEW ---
-elif user_role in ['Scientist', 'Study Director']:
+def render_scientist_director_view():
+    """Renders the main dashboard for Scientists and Study Directors."""
     st.markdown("##### Overview of key programs and links to analytical modules.")
-    st.info("💡 **Navigate to specialized modules using the sidebar on the left.** This Command Center provides a high-level summary. Detailed tools for Stability, Process Capability, and Regulatory Support are available on their respective pages.")
+    st.info("💡 **Navigate to specialized modules using the sidebar on the left.** This Command Center provides a high-level summary.")
     
+    hplc_df = dc.fetch_hplc_data(st.session_state.db_connection)
     kpi_cols = st.columns(3)
-    with kpi_cols[0]:
-        st.metric("Total Active Studies", len(hplc_df['study_id'].unique()))
-    with kpi_cols[1]:
-        st.metric("Upcoming Stability Pulls", "12 Lots", help="Number of stability lots with testing due in the next 30 days.")
-    with kpi_cols[2]:
-        st.metric("Pending Action Items", "5", delta="2 new", delta_color="inverse")
-        
-    st.markdown("---")
-    st.subheader("Module Quick Links")
+    kpi_cols[0].metric("Total Active Studies", len(hplc_df['study_id'].unique()))
+    kpi_cols[1].metric("Upcoming Stability Pulls", "12 Lots")
+    kpi_cols[2].metric("Pending Action Items", "5", delta="2 new", delta_color="inverse")
     
-    st.page_link("pages/1_Process_Capability_Dashboard.py", label="**Process Capability Dashboard**", icon="📈", help="Analyze historical process stability and capability (Cpk) for any product or assay.")
-    st.page_link("pages/2_Stability_Program_Dashboard.py", label="**Stability Program Dashboard**", icon="⏳", help="View and trend stability data against specification limits.")
-    st.page_link("pages/3_CMC_Regulatory_Support.py", label="**CMC Regulatory Support**", icon="📄", help="Generate formatted data summaries and PDF reports for regulatory submissions.")
-    st.page_link("pages/4_Governance_&_Audit.py", label="**Governance & Audit Hub**", icon="⚖️", help="Review the GxP audit trail and data lineage.")
+    st.markdown("---")
+    st.subheader("Use the sidebar to navigate to your analytical tools.")
 
-# --- QC ANALYST VIEW ---
-elif user_role == 'QC Analyst':
+def render_qc_analyst_view():
+    """Renders the main dashboard for QC Analysts."""
     st.markdown("##### Central hub for managing deviations and monitoring instrument health.")
     st.info("💡 **Navigate to specialized modules using the sidebar on the left.** This Command Center provides a high-level summary of active issues.")
 
+    deviations_df = dc.fetch_deviations_data()
     kpi_cols = st.columns(3)
-    with kpi_cols[0]:
-        st.metric("New Deviations", deviations_df[deviations_df['status'] == 'New'].shape[0], help="Number of deviations awaiting initial investigation.")
-    with kpi_cols[1]:
-        st.metric("In Progress Deviations", deviations_df[deviations_df['status'] == 'In Progress'].shape[0])
-    with kpi_cols[2]:
-        st.metric("Deviations Pending QA", deviations_df[deviations_df['status'] == 'Pending QA'].shape[0])
+    kpi_cols[0].metric("New Deviations", deviations_df[deviations_df['status'] == 'New'].shape[0])
+    kpi_cols[1].metric("In Progress Deviations", deviations_df[deviations_df['status'] == 'In Progress'].shape[0])
+    kpi_cols[2].metric("Deviations Pending QA", deviations_df[deviations_df['status'] == 'Pending QA'].shape[0])
 
     st.markdown("---")
-    st.subheader("Module Quick Links")
+    st.subheader("Use the sidebar to navigate to the Deviation Hub and other tools.")
 
-    st.page_link("pages/1_Process_Capability_Dashboard.py", label="**Process Capability Dashboard**", icon="📈", help="Analyze historical process stability and capability (Cpk) for any product or assay.")
-    st.page_link("pages/5_Deviation_Hub.py", label="**Deviation Hub**", icon="📌", help="Manage the lifecycle of deviations using an interactive Kanban board.")
+# --- 6. Main Application Logic: Render the correct view based on role ---
+st.title("VERITAS Command Center")
+st.header(f"'{st.session_state.user_role}' View")
+st.markdown("---")
 
-
-# --- Global Compliance Footer ---
-auth.display_compliance_footer()
+# Main dashboard router
+if user_role == 'DTE Leadership':
+    render_dte_view()
+elif user_role in ['Scientist', 'Study Director']:
+    render_scientist_director_view()
+elif user_role == 'QC Analyst':
+    render_qc_analyst_view()
