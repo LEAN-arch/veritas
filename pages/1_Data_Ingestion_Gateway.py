@@ -4,9 +4,11 @@ import pandas as pd
 import numpy as np
 import time
 from datetime import datetime
-
+from utils import auth
 # Import from the centralized backend modules
 from utils import plotters, data_connector as dc
+
+auth.check_page_authorization()
 
 # Set the page configuration for this specific page
 st.set_page_config(page_title="Ingestion Gateway", page_icon="📥", layout="wide")
