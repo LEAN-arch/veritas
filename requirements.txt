@@ -2,7 +2,7 @@
 streamlit
 pandas
 plotly
-numpy
+numpy<2.0  # <-- THIS IS THE CRITICAL FIX
 scikit-learn
 pyarrow
 streamlit-option-menu
