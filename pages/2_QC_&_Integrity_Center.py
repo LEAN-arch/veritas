@@ -53,7 +53,7 @@ with col2:
             st.write("Running ML Outlier Detection...")
             time.sleep(1.5)
             if rules['run_outlier_detection']:
-                # Ensure we only use numeric columns for the model
+                # Ensure we only use numeric columns for the model to prevent errors
                 numeric_cols = df.select_dtypes(include=['number']).dropna()
                 iso_forest = IsolationForest(contamination=0.05, random_state=42)
                 preds = iso_forest.fit_predict(numeric_cols)
@@ -63,7 +63,7 @@ with col2:
 
             total_issues = null_issues + negative_issues + outlier_issues
             num_cells = df.shape[0] * df.shape[1]
-            dqs = 100 * (1 - total_issues / num_cells)
+            dqs = 100 * (1 - total_issues / num_cells) if num_cells > 0 else 100
 
             status.update(label="QC Complete!", state="complete", expanded=False)
 
@@ -73,8 +73,9 @@ with col2:
         res_col2.metric("First Pass Yield (FPY)", "FAIL", delta="-12% from target", delta_color="inverse")
         res_col3.metric("Discrepancies Found", total_issues)
         
-        # THIS IS THE CORRECTED LINE:
+        # VERIFIED CORRECT LINE: The string is properly terminated with a quote.
         st.error(f"Found {total_issues} discrepancies. Flagged data has been sent to the QC Analyst Triage Queue.")
+        
         st.info("A detailed QC report has been generated and logged.")
 
 display_compliance_footer()
