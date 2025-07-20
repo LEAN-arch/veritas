@@ -1,5 +1,6 @@
 # pages/4_Compliance_&_Audit_Hub.py
 import streamlit as st
+import pandas as pd  # <-- ADDED
 from utils.auth import display_compliance_footer, get_user_role
 from utils.data_generator import create_mock_audit_trail
 from utils.plotters import plot_data_lineage
