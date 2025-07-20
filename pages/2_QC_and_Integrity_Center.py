@@ -2,9 +2,10 @@
 import streamlit as st
 import pandas as pd
 import numpy as np
-
+from utils import auth
 # Import from the centralized backend modules
 from utils import qc_engine, plotters, auth
+auth.check_page_authorization()
 
 # Set the page configuration for this specific page
 st.set_page_config(page_title="QC & Integrity Center", page_icon="🔬", layout="wide")
