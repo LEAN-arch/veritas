@@ -88,6 +88,7 @@ def plot_pareto_chart(df: pd.DataFrame) -> go.Figure:
 
 def plot_historical_control_chart(df: pd.DataFrame, cqa: str, date_range: tuple) -> go.Figure:
     """Creates a historical I-MR control chart for a selected CQA."""
+    df['injection_time'] = pd.to_datetime(df['injection_time'])
     df_filtered = df[(df['injection_time'] >= pd.to_datetime(date_range[0])) & (df['injection_time'] <= pd.to_datetime(date_range[1]))].copy()
     
     if len(df_filtered) < 2:
@@ -145,7 +146,7 @@ def plot_stability_trend(df: pd.DataFrame, assay: str, spec_limits: dict) -> go.
     fig.update_layout(title=f"<b>Stability Trend for {assay}</b>", xaxis_title="Timepoint (Months)", yaxis_title="Value", template=VERITAS_THEME, height=400)
     return fig
 
-# --- Missing Plot Functions (Now Implemented) ---
+# --- ANOVA, Normality, and ML Plots ---
 
 def plot_anova_results(df: pd.DataFrame, value_col: str, group_col: str) -> go.Figure:
     """Creates a box plot for ANOVA analysis."""
@@ -157,9 +158,9 @@ def plot_anova_results(df: pd.DataFrame, value_col: str, group_col: str) -> go.F
 
 def plot_qq(data: pd.Series) -> go.Figure:
     """Generates a Q-Q plot to test for normality."""
-    if data.empty:
+    if data.empty or data.dropna().empty:
         return create_empty_figure("No data for Q-Q plot.")
-    qq_data = stats.probplot(data, dist="norm")
+    qq_data = stats.probplot(data.dropna(), dist="norm")
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=qq_data[0][0], y=qq_data[0][1], mode='markers', name='Data'))
     fig.add_trace(go.Scatter(x=qq_data[0][0], y=qq_data[1][1] + qq_data[1][0]*qq_data[0][0], mode='lines', name='Fit'))
@@ -182,5 +183,27 @@ def plot_ml_anomaly_results(df: pd.DataFrame, x_col: str, y_col: str, labels: np
     return fig
     
 def plot_spc_chart(df: pd.DataFrame, value_col: str) -> go.Figure:
-    """Creates a simple SPC (I-MR) chart."""
+    """Creates a simple SPC (I-Chart) chart."""
+    if df.empty or 'injection_time' not in df.columns:
+         return create_empty_figure("Invalid data for SPC chart.")
     return plot_historical_control_chart(df, value_col, (df['injection_time'].min(), df['injection_time'].max()))
+
+# --- Ingestion Plots ---
+
+def plot_ingestion_trend(df: pd.DataFrame) -> go.Figure:
+    """Creates a trend chart for data ingestion success rate."""
+    if df.empty or 'Date' not in df.columns or 'Success Rate (%)' not in df.columns:
+        return create_empty_figure("No data for ingestion trend.")
+        
+    fig = px.line(df, x='Date', y='Success Rate (%)', title="<b>Historical Ingestion Success Rate</b>", markers=True)
+    fig.update_layout(template=VERITAS_THEME, height=350, yaxis_range=[85,101])
+    return fig
+
+def plot_ingestion_volume(df: pd.DataFrame) -> go.Figure:
+    """Creates a bar chart for the volume of files processed."""
+    if df.empty or 'Date' not in df.columns or 'Files Processed' not in df.columns:
+        return create_empty_figure("No data for ingestion volume.")
+
+    fig = px.bar(df, x='Date', y='Files Processed', title="<b>Historical Ingestion Volume</b>")
+    fig.update_layout(template=VERITAS_THEME, height=350)
+    return fig
