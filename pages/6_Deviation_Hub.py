@@ -1,10 +1,10 @@
 # pages/6_deviation_hub.py
 import streamlit as st
 import pandas as pd
-
+from utils import auth
 # Import from the centralized backend modules
 from utils import ui_components, data_connector as dc, auth
-
+auth.check_page_authorization()
 # Set the page configuration for this specific page
 st.set_page_config(page_title="Deviation Hub", page_icon="📌", layout="wide")
 
