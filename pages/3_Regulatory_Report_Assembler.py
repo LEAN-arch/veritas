@@ -5,8 +5,11 @@ import time
 import io
 from pptx import Presentation
 from pptx.util import Inches, Pt
-from prophet import Prophet
-from prophet.plot import plot_plotly
+import plotly.graph_objects as go
+
+# Import the new forecasting library
+from statsforecast import StatsForecast
+from statsforecast.models import AutoARIMA
 
 from utils.auth import display_compliance_footer, get_user_role
 from utils.plotters import plot_spc_chart
@@ -58,7 +61,6 @@ def create_report_pptx(df, report_title, data_package_name):
     title = slide.shapes.title
     title.text = "Data Summary"
     
-    # Add a data table
     summary_df = df.head(10)[['sample_id', 'batch_id', 'analyte_concentration', 'retention_time']]
     add_table_to_slide(slide, summary_df, Inches(0.5), Inches(1.5), Inches(9.0), Inches(4.0))
 
@@ -67,37 +69,37 @@ def create_report_pptx(df, report_title, data_package_name):
     title = slide.shapes.title
     title.text = "Process Stability Analysis (SPC)"
     
-    # Generate and save SPC plot to memory
     spc_fig = plot_spc_chart(df, 'analyte_concentration')
     spc_img_stream = io.BytesIO()
     spc_fig.write_image(spc_img_stream, format="png", width=800, height=450, scale=2)
     spc_img_stream.seek(0)
-    
-    # Add image to slide
     slide.shapes.add_picture(spc_img_stream, Inches(1), Inches(1.5), width=Inches(8))
 
-    # Slide 4: Advanced Analytics - Prophet Forecast
+    # Slide 4: Advanced Analytics - StatsForecast
     slide = prs.slides.add_slide(content_slide_layout)
     title = slide.shapes.title
-    title.text = "Advanced Analytics: Stability Forecast"
+    title.text = "Advanced Analytics: Stability Forecast (AutoARIMA)"
     
-    # Prepare data for Prophet
-    prophet_df = df[['injection_time', 'retention_time']].copy()
-    prophet_df.rename(columns={'injection_time': 'ds', 'retention_time': 'y'}, inplace=True)
-    
+    # Prepare data for StatsForecast
+    fcst_df = df[['injection_time', 'retention_time']].copy()
+    fcst_df.rename(columns={'injection_time': 'ds', 'retention_time': 'y'}, inplace=True)
+    fcst_df['unique_id'] = 'instrument_1' # Add a required unique_id column
+    fcst_df = fcst_df.sort_values('ds').reset_index(drop=True)
+
     # Fit model and make forecast
-    m = Prophet(daily_seasonality=False, weekly_seasonality=False, yearly_seasonality=False).fit(prophet_df)
-    future = m.make_future_dataframe(periods=20, freq='15min') # Forecast next 20 samples
-    forecast = m.predict(future)
+    sf = StatsForecast(models=[AutoARIMA()], freq='15min')
+    sf.fit(fcst_df)
+    forecast_df = sf.predict(h=20) # Forecast next 20 samples
     
     # Generate and save forecast plot to memory
-    forecast_fig = plot_plotly(m, forecast)
-    forecast_fig.update_layout(title="Forecast of 'Retention Time' to Predict Drift")
-    forecast_img_stream = io.BytesIO()
-    forecast_fig.write_image(forecast_img_stream, format="png", width=800, height=400, scale=2)
-    forecast_img_stream.seek(0)
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=fcst_df['ds'], y=fcst_df['y'], mode='lines', name='Historical Data'))
+    fig.add_trace(go.Scatter(x=forecast_df['ds'], y=forecast_df['AutoARIMA'], mode='lines', name='Forecast', line={'dash': 'dash'}))
+    fig.update_layout(title="Forecast of 'Retention Time' to Predict Drift", xaxis_title="Time", yaxis_title="Retention Time")
     
-    # Add image to slide
+    forecast_img_stream = io.BytesIO()
+    fig.write_image(forecast_img_stream, format="png", width=800, height=400, scale=2)
+    forecast_img_stream.seek(0)
     slide.shapes.add_picture(forecast_img_stream, Inches(1), Inches(1.8), width=Inches(8))
 
     # Save presentation to a memory buffer
@@ -113,44 +115,26 @@ get_user_role()
 st.title("Module 3: Regulatory Package & Report Assembler")
 st.markdown("Automate the generation of study reports from the Single Source of Truth.")
 
-# --- Configuration ---
 st.subheader("1. Report Configuration")
 col1, col2 = st.columns(2)
 with col1:
-    report_template = st.selectbox(
-        "Select Report Template", 
-        ("IND Study Report", "PK Analysis Summary", "Response to Agency Query")
-    )
+    report_template = st.selectbox("Select Report Template", ("IND Study Report", "PK Analysis Summary"))
 with col2:
-    data_package = st.selectbox(
-        "Select Approved QC'd Data Package",
-        ("PK_Study_2024-A (v2.1)", "Tox_Assay_Run_05 (v1.0)")
-    )
+    data_package = st.selectbox("Select Approved QC'd Data Package", ("PK_Study_2024-A (v2.1)", "Tox_Assay_Run_05 (v1.0)"))
 
 st.markdown("---")
 
-# --- Generation ---
 if st.button("Assemble & Download Report"):
-    st.subheader("2. Report Generation")
-    
-    with st.spinner("Assembling real report... Pulling data, generating plots, and compiling..."):
-        # Load fresh data for the report
+    with st.spinner("Assembling real report... This may take a moment."):
         report_df = create_mock_hplc_data(50)
-        
-        # Call the new function to generate the PPTX file in memory
         report_bytes = create_report_pptx(report_df, report_template, data_package)
         
-        st.success("✔️ Report Assembled!")
-        st.info("Your report is a standard `.pptx` file, ready for internal review or to be saved as a PDF.")
-    
-        # --- Finalization and Download ---
-        st.download_button(
-            label="⬇️ Download PowerPoint Report (.pptx)",
-            data=report_bytes,
-            file_name=f"{report_template.replace(' ', '_')}_{data_package.split(' ')[0]}.pptx",
-            mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
-        )
-else:
-    st.info("Click the button above to generate a downloadable PowerPoint report.")
+    st.success("✔️ Report Assembled!")
+    st.download_button(
+        label="⬇️ Download PowerPoint Report (.pptx)",
+        data=report_bytes,
+        file_name=f"{report_template.replace(' ', '_')}.pptx",
+        mime="application/vnd.openxmlformats-officedocument.presentationml.presentation"
+    )
 
 display_compliance_footer()
