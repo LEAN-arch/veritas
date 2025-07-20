@@ -1,7 +1,7 @@
 # pages/2_QC_&_Integrity_Center.py
 import streamlit as st
 import pandas as pd
-import time  # <-- ADDED
+import time
 from sklearn.ensemble import IsolationForest
 
 from utils.auth import display_compliance_footer, get_user_role
@@ -53,8 +53,10 @@ with col2:
             st.write("Running ML Outlier Detection...")
             time.sleep(1.5)
             if rules['run_outlier_detection']:
+                # Ensure we only use numeric columns for the model
+                numeric_cols = df.select_dtypes(include=['number']).dropna()
                 iso_forest = IsolationForest(contamination=0.05, random_state=42)
-                preds = iso_forest.fit_predict(df[['analyte_concentration', 'peak_area', 'retention_time']].dropna())
+                preds = iso_forest.fit_predict(numeric_cols)
                 outlier_issues = (preds == -1).sum()
             else:
                 outlier_issues = 0
@@ -71,10 +73,8 @@ with col2:
         res_col2.metric("First Pass Yield (FPY)", "FAIL", delta="-12% from target", delta_color="inverse")
         res_col3.metric("Discrepancies Found", total_issues)
         
+        # THIS IS THE CORRECTED LINE:
         st.error(f"Found {total_issues} discrepancies. Flagged data has been sent to the QC Analyst Triage Queue.")
-        st.info("A detailed QC report has been generated and logged.")
-
-display_compliance_footer()Queue.")
         st.info("A detailed QC report has been generated and logged.")
 
 display_compliance_footer()
