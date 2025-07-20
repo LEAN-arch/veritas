@@ -1,9 +1,9 @@
 # requirements.txt
-streamlit==1.34.0
-pandas==2.1.4
-plotly==5.18.0
-numpy==1.26.4  # Lock to a specific, known-good version
-scikit-learn==1.3.2
+streamlit
+pandas
+plotly
+numpy==1.26.4  # <-- LOCK to this specific version
+scikit-learn
 pyarrow
 streamlit-option-menu
 prophet==1.1.5
