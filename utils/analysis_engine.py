@@ -65,12 +65,14 @@ def calculate_stability_projection(df: pd.DataFrame, time_col: str, value_col: s
     
     # Project time to hit a lower spec limit (degrading trend)
     if slope < 0 and value_data.mean() > spec_limit:
-        months_to_spec = (spec_limit - intercept) / slope
-        projection = {'slope': slope, 'intercept': intercept, 'months_to_spec': months_to_spec}
+        if slope != 0:
+            months_to_spec = (spec_limit - intercept) / slope
+            projection = {'slope': slope, 'intercept': intercept, 'months_to_spec': months_to_spec}
     # Project time to hit an upper spec limit (increasing trend)
     elif slope > 0 and value_data.mean() < spec_limit:
-        months_to_spec = (spec_limit - intercept) / slope
-        projection = {'slope': slope, 'intercept': intercept, 'months_to_spec': months_to_spec}
+        if slope != 0:
+            months_to_spec = (spec_limit - intercept) / slope
+            projection = {'slope': slope, 'intercept': intercept, 'months_to_spec': months_to_spec}
 
     return projection
 
