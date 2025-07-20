@@ -24,6 +24,7 @@ class MockDataFactory:
         self.stability_df = self._generate_stability_data()
         self.audit_df = self._generate_audit_trail(self.hplc_df, self.deviations_df)
         self.gantt_df = self._generate_gantt_data()
+        self.ingestion_history_df = self._generate_ingestion_history()
 
     def _generate_hplc_data(self, num_samples=500):
         """Generates realistic HPLC data with intentional anomalies for QC."""
@@ -43,18 +44,13 @@ class MockDataFactory:
         df = pd.DataFrame(data)
 
         # --- Inject Realistic Anomalies ---
-        # 1. Out-of-Spec (OOS) result
         df.loc[10, 'Purity'] = 97.8 
-        # 2. Missing metadata
         df.loc[25, 'batch_id'] = np.nan
-        # 3. Instrument drift simulation
         hplc03_indices = df[df['instrument_id'] == 'HPLC-03'].index
         drift_factor = np.linspace(0, 0.35, len(hplc03_indices))
         df.loc[hplc03_indices, 'Main Impurity'] += drift_factor
-        # 4. Analyst entry error
         df.loc[50, 'Bio-activity'] = 205.0
         
-        # Clip values to be realistic post-anomaly injection
         df['Purity'] = df['Purity'].clip(97.0, 100)
         df['Aggregate Content'] = df['Aggregate Content'].clip(0, 1)
         df['Main Impurity'] = df['Main Impurity'].clip(0, 1.0)
@@ -63,21 +59,15 @@ class MockDataFactory:
     def _generate_deviations_data(self, hplc_df):
         """Generates deviation records linked to actual anomalies in HPLC data."""
         deviations = []
-        
-        # Deviation for the OOS Purity result
         oos_sample = hplc_df.iloc[10]
         deviations.append({
             "id": "DEV-001", "title": f"OOS Result in {oos_sample['study_id']} Purity Assay", 
             "status": "New", "priority": "High", "linked_record": oos_sample['sample_id']
         })
-
-        # Deviation for instrument drift
         deviations.append({
             "id": "DEV-002", "title": "Instrument HPLC-03 Calibration Drift Detected", 
             "status": "In Progress", "priority": "Medium", "linked_record": "HPLC-03"
         })
-        
-        # A few generic deviations
         deviations.append({
             "id": "DEV-003", "title": "TAT Breach for Lot B02-A", 
             "status": "In Progress", "priority": "Medium", "linked_record": "B02-A"
@@ -90,7 +80,6 @@ class MockDataFactory:
             "id": "DEV-005", "title": "Logbook entry missing for UPLC-01", 
             "status": "New", "priority": "Low", "linked_record": "UPLC-01"
         })
-        
         return pd.DataFrame(deviations)
 
     def _generate_stability_data(self):
@@ -108,11 +97,8 @@ class MockDataFactory:
                     purity = p_start - (t * lot_rng.uniform(0.05, 0.08)) - lot_rng.uniform(0, 0.1)
                     impurity = i_start + (t * lot_rng.uniform(0.01, 0.02)) + lot_rng.uniform(0, 0.05)
                     data.append({
-                        'product_id': product,
-                        'lot_id': lot,
-                        'Timepoint (Months)': t, 
-                        'Purity (%)': purity, 
-                        'Main Impurity (%)': impurity
+                        'product_id': product, 'lot_id': lot, 'Timepoint (Months)': t, 
+                        'Purity (%)': purity, 'Main Impurity (%)': impurity
                     })
         return pd.DataFrame(data)
 
@@ -122,7 +108,6 @@ class MockDataFactory:
         actions = ['User Login', 'Data Fetched', 'Report Generated', 'Deviation Status Changed', 
                    'Stability Plot Viewed', 'E-Signature Applied', 'Data Exported', 'File Ingested']
         
-        # Create a pool of realistic record IDs from actual data
         record_ids = hplc_df['sample_id'].tolist() + deviations_df['id'].tolist() + ['system_config', 'user_roles']
         
         log = []
@@ -138,8 +123,13 @@ class MockDataFactory:
             elif action == 'E-Signature Applied':
                 details = "User signed off on report 'RPT-101' for Author Approval."
             
+            # --- THE FIX IS HERE ---
+            # The result of self.rng.integers is a numpy.int64, which timedelta dislikes.
+            # We cast it to a standard Python int() to resolve the TypeError.
+            random_minutes = int(self.rng.integers(0, 59))
+            
             log.append({
-                'Timestamp': datetime.now() - timedelta(hours=i * 1.3, minutes=self.rng.integers(0, 59)),
+                'Timestamp': datetime.now() - timedelta(hours=i * 1.3, minutes=random_minutes),
                 'User': user,
                 'Action': action,
                 'Record ID': record_id,
@@ -156,3 +146,11 @@ class MockDataFactory:
             dict(Program="VX-121 (Pain)", Start='2023-10-10', Finish='2024-05-30', Status='In Progress', Risk='High'),
         ]
         return pd.DataFrame(data)
+
+    def _generate_ingestion_history(self):
+        """Generates data for historical ingestion metrics trends."""
+        dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
+        success_rate = 95 + self.rng.standard_normal(30).cumsum() * 0.1
+        success_rate = np.clip(success_rate, 90, 99.8)
+        files_processed = self.rng.integers(500, 800, 30)
+        return pd.DataFrame({'Date': dates, 'Success Rate (%)': success_rate, 'Files Processed': files_processed})
