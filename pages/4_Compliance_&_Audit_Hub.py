@@ -78,10 +78,14 @@ with tab2:
     st.subheader("Visual Data Lineage Tracer")
     st.info("Trace the complete history of any data record, from ingestion through QC and transformation to final reporting.")
     
+    # --- ENHANCED: Find a good example record to ensure the chart is populated on first view ---
+    # Find the Record ID with the most audit entries to use as a robust default example.
+    good_example_id = audit_df['Record ID'].mode()[0]
+    
     record_id = st.text_input(
         "Enter Record ID to Trace", 
-        value="SMP-1005", 
-        help="Example: SMP-1005, RPT-112, user_roles"
+        value=good_example_id, # Use the dynamically found good example as the default
+        help=f"Example: {good_example_id}"
     )
     if record_id:
         with st.spinner(f"Generating lineage for {record_id}..."):
