@@ -11,52 +11,54 @@ VERTEX_COLORS = {
     'orange': '#F37021', 'gray': '#6A737B', 'red': '#D4000F'
 }
 
-def plot_data_lineage_sankey(df, record_id):
+def render_lineage_timeline(df, record_id):
     """
-    Creates a Sankey diagram to visualize the data lineage for a specific record.
-    This is the superior, industry-standard method for showing flow.
+    Renders a professional, vertical timeline of events for a specific record.
+    This is not a plot, but a custom Streamlit component for superior UX.
     """
     record_df = df[df['Record ID'] == record_id].copy().sort_values('Timestamp', ascending=True)
 
-    if len(record_df) < 2:
-        return None # Not enough data points to create a flow diagram
+    if record_df.empty:
+        st.warning(f"No audit records found for the selected Record ID: **{record_id}**.")
+        return
 
-    # Create more descriptive labels for nodes
-    record_df['NodeLabel'] = record_df['Action'] + ' by ' + record_df['User']
-    all_nodes = record_df['NodeLabel'].unique().tolist()
+    st.subheader(f"Lineage for: {record_id}")
     
-    source_indices = []
-    target_indices = []
-    
-    # Create links by connecting sequential events
-    for i in range(len(record_df) - 1):
-        source_label = record_df.iloc[i]['NodeLabel']
-        target_label = record_df.iloc[i+1]['NodeLabel']
-        
-        source_indices.append(all_nodes.index(source_label))
-        target_indices.append(all_nodes.index(target_label))
-        
-    fig = go.Figure(go.Sankey(
-        arrangement="snap",
-        node={
-            "pad": 25,
-            "thickness": 20,
-            "line": dict(color="black", width=0.5),
-            "label": all_nodes,
-        },
-        link={
-            "source": source_indices,
-            "target": target_indices,
-            "value": [1] * len(source_indices), # All flows have equal weight for lineage
-        }
-    ))
-    
-    fig.update_layout(
-        title_text=f"<b>Data Lineage Flow for Record: {record_id}</b>",
-        font_size=12,
-        height=500
-    )
-    return fig
+    # Define icons for different actions to make the timeline scannable
+    action_icons = {
+        "File Ingested": "📥",
+        "QC Rule Applied": "🔬",
+        "Data Point Flagged": "🚩",
+        "Discrepancy Resolved": "✅",
+        "Report Generated": "📄",
+        "E-Signature Applied": "✍️",
+        "User Login": "👤",
+        "Data Exported": "📤",
+        "Permission Changed": "🔒"
+    }
+
+    # Iterate through each event in the record's history
+    for index, row in record_df.iterrows():
+        with st.container():
+            col1, col2 = st.columns([1, 10])
+            
+            with col1:
+                # Display a large icon for the event type
+                st.markdown(f"<div style='font-size: 2em; text-align: center;'>{action_icons.get(row['Action'], '⚙️')}</div>", unsafe_allow_html=True)
+
+            with col2:
+                # Display the event details
+                st.markdown(f"**{row['Action']}**")
+                st.markdown(f"**By:** {row['User']} | **Timestamp:** {row['Timestamp'].strftime('%Y-%m-%d %H:%M:%S')}")
+                
+                # Use an expander for detailed, GxP-relevant information
+                with st.expander("Show Details"):
+                    st.markdown(f"**Old Value:** `{row['Old Value']}`")
+                    st.markdown(f"**New Value:** `{row['New Value']}`")
+                    st.markdown(f"**21 CFR 11 Justification:** *{row['21 CFR 11 Justification']}*")
+            
+            st.markdown("<hr style='margin-top: 0; margin-bottom: 1em;'/>", unsafe_allow_html=True)
+
 
 # --- ALL OTHER PLOTTING FUNCTIONS REMAIN THE SAME ---
 
