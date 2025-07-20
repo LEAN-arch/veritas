@@ -1,20 +1,32 @@
 # VERITAS_app.py
 import streamlit as st
+import pandas as pd
+import numpy as np
+from scipy import stats
+
 from utils.auth import get_user_role, display_compliance_footer
-from utils.data_generator import *
-from utils.plotters import *
+from utils.data_generator import (
+    create_mock_hplc_data, get_program_gantt_data, get_qc_error_data, 
+    create_dose_response_data, create_plate_heatmap_data
+)
+from utils.plotters import (
+    plot_sankey_flow, plot_gantt_chart, plot_levey_jennings, 
+    plot_pareto_chart, plot_dose_response, plot_inter_assay_comparison, 
+    plot_plate_heatmap, plot_anova_results
+)
 
 # --- Page Configuration: Must be the first Streamlit command ---
 st.set_page_config(
-    page_title="VERITAS",
-    page_icon="🧪",
-    layout="wide",
+    page_title="VERITAS", 
+    page_icon="🧪", 
+    layout="wide", 
     initial_sidebar_state="expanded"
 )
 
-# --- Data Caching: Load all data once ---
+# --- Data Caching: Load all data once for performance ---
 @st.cache_data
 def load_all_data():
+    """Loads all datasets into memory, cached for efficiency."""
     return {
         "hplc": create_mock_hplc_data(250),
         "gantt": get_program_gantt_data(),
@@ -32,12 +44,12 @@ with st.sidebar:
     user_role = get_user_role()
     st.markdown("---")
     if st.button("Logout"):
-        # Clear session state on logout
+        # Clear session state on logout to reset the app for a new user
         for key in st.session_state.keys():
             del st.session_state[key]
         st.rerun()
 
-# --- Main Application Logic ---
+# --- Main Application Header ---
 st.header(f"'{user_role}' Command Center")
 
 # --- DTE LEADERSHIP VIEW ---
@@ -75,7 +87,7 @@ elif user_role in ['Scientist', 'Study Director']:
     
     study_id = st.selectbox("Select Your Study to Analyze", options=data['hplc']['study_id'].unique())
     study_data = data['hplc'][data['hplc']['study_id'] == study_id]
-
+    
     kpi_cols = st.columns(3)
     with kpi_cols[0]: st.metric("Samples in Study", len(study_data))
     with kpi_cols[1]: st.metric("Data Quality Score (DQS)", f"{np.random.uniform(95, 99.9):.1f}%")
@@ -106,12 +118,16 @@ elif user_role == 'QC Analyst':
     
     tab1, tab2 = st.tabs(["🚨 Triage & Instrument Monitoring", "🔧 Cross-Instrument Performance"])
     with tab1:
-        col1, col2 = st.columns((4,6))
+        col1, col2 = st.columns((4, 6))
         with col1:
             st.subheader("Discrepancy Triage Queue")
             discrepancies = data['hplc'][~data['hplc']['analyte_concentration'].between(0, 150) | data['hplc']['peak_area'].isnull()].copy().head()
             discrepancies['Status'] = 'Open'
-            st.data_editor(discrepancies[['sample_id', 'instrument_id', 'analyte_concentration', 'Status']], use_container_width=True, hide_index=True)
+            st.data_editor(
+                discrepancies[['sample_id', 'instrument_id', 'analyte_concentration', 'Status']], 
+                use_container_width=True, 
+                hide_index=True
+            )
         with col2:
             st.subheader("Live Instrument Monitoring")
             instrument_id = st.selectbox("Select Instrument for QC Monitoring", options=data['hplc']['instrument_id'].unique())
@@ -122,4 +138,5 @@ elif user_role == 'QC Analyst':
         st.info("💡 **SME Insight:** Use ANOVA (Analysis of Variance) to statistically determine if there are significant differences between instrument measurement populations. A low p-value (< 0.05) suggests that at least one instrument performs differently from the others.")
         st.plotly_chart(plot_anova_results(data['hplc'], 'retention_time', 'instrument_id'), use_container_width=True)
 
+# --- Global Compliance Footer ---
 display_compliance_footer()
