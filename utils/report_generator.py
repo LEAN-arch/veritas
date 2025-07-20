@@ -40,15 +40,13 @@ class PDF(FPDF):
     def add_dataframe(self, df):
         self.set_font('Helvetica', 'B', 9)
         col_width = self.w / (len(df.columns) + 1.5)
-        # Header
         for col in df.columns:
             self.cell(col_width, 7, col, 1, 0, 'C')
         self.ln()
-        # Data
         self.set_font('Helvetica', '', 9)
         for _, row in df.iterrows():
-            for col in df.columns:
-                self.cell(col_width, 6, str(row[col]), 1, 0, 'L')
+            for item in row:
+                self.cell(col_width, 6, str(item), 1, 0, 'L')
             self.ln()
         self.ln(5)
 
@@ -69,9 +67,12 @@ def generate_pdf_report(report_data: dict) -> bytes:
 
     # Section 2: Summary Statistics
     pdf.chapter_title("2.0 Summary Statistics")
-    summary_stats = report_data['data'][[report_data['cqa']]].describe().round(3).reset_index()
-    summary_stats.columns = ['Statistic', 'Value']
-    pdf.add_dataframe(summary_stats)
+    if report_data['cqa'] in report_data['data'].columns:
+        summary_stats = report_data['data'][[report_data['cqa']]].describe().round(3).reset_index()
+        summary_stats.columns = ['Statistic', 'Value']
+        pdf.add_dataframe(summary_stats)
+    else:
+        pdf.chapter_body(f"Error: CQA '{report_data['cqa']}' not found in the dataset.")
 
     # Section 3: Analyst Commentary
     pdf.chapter_title("3.0 Analyst Commentary")
@@ -89,17 +90,18 @@ def _add_table_to_slide(slide, df, left, top, width, height):
     rows += 1 # Add a row for the header
     table = slide.shapes.add_table(rows, cols, left, top, width, height).table
 
-    # Set column widths
     for i in range(cols):
         table.columns[i].width = Inches(width.inches / cols)
 
-    # Write header and data
     for c, col_name in enumerate(df.columns):
         table.cell(0, c).text = col_name
         table.cell(0, c).text_frame.paragraphs[0].font.bold = True
+        table.cell(0, c).text_frame.paragraphs[0].font.size = Pt(10)
     for r in range(rows - 1):
         for c, col_name in enumerate(df.columns):
-            table.cell(r + 1, c).text = str(df.iloc[r, c])
+            cell_value = df.iloc[r, c]
+            table.cell(r + 1, c).text = str(cell_value) if pd.notna(cell_value) else ""
+            table.cell(r + 1, c).text_frame.paragraphs[0].font.size = Pt(9)
 
 def generate_ppt_report(df: pd.DataFrame, report_title: str, plot_fig: go.Figure) -> bytes:
     """Generates a PowerPoint report with data and a plot."""
@@ -109,27 +111,26 @@ def generate_ppt_report(df: pd.DataFrame, report_title: str, plot_fig: go.Figure
     title_slide_layout = prs.slide_layouts[0]
     slide = prs.slides.add_slide(title_slide_layout)
     slide.shapes.title.text = "VERITAS Automated Study Report"
-    slide.placeholders[1].text = f"Report Type: {report_title}\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
+    slide.placeholders[1].text = f"Report Title: {report_title}\nGenerated: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
     
     # Slide 2: Data Summary Table
     content_slide_layout = prs.slide_layouts[5]
     slide = prs.slides.add_slide(content_slide_layout)
     slide.shapes.title.text = "Data Summary (First 10 Rows)"
-    summary_df = df.head(10)[['sample_id', 'batch_id', 'Purity', 'Main Impurity']]
+    summary_cols = ['sample_id', 'batch_id', 'Purity', 'Main Impurity']
+    summary_df = df[summary_cols].head(10)
     _add_table_to_slide(slide, summary_df, Inches(0.5), Inches(1.5), Inches(9.0), Inches(4.0))
 
     # Slide 3: Dynamic Plot
     slide = prs.slides.add_slide(content_slide_layout)
-    slide.shapes.title.text = "Process Analysis"
+    slide.shapes.title.text = plot_fig.layout.title.text or "Process Analysis Chart"
     
-    # Save plot to an in-memory image stream
     img_stream = io.BytesIO()
     plot_fig.write_image(img_stream, format="png", width=800, height=450, scale=2)
     img_stream.seek(0)
     
     slide.shapes.add_picture(img_stream, Inches(1), Inches(1.5), width=Inches(8))
 
-    # Save the final presentation to an in-memory buffer
     pptx_io = io.BytesIO()
     prs.save(pptx_io)
     pptx_io.seek(0)
