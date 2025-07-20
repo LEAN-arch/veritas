@@ -4,10 +4,10 @@ from utils.auth import get_user_role, display_compliance_footer
 from utils.data_generator import *
 from utils.plotters import *
 
-# --- Page Configuration: CORRECTED ---
+# --- Page Configuration: Must be the first Streamlit command ---
 st.set_page_config(
     page_title="VERITAS",
-    page_icon="🧪",  # Using a standard emoji instead of a file
+    page_icon="🧪",
     layout="wide",
     initial_sidebar_state="expanded"
 )
@@ -24,18 +24,18 @@ def load_all_data():
     }
 data = load_all_data()
 
-# --- Sidebar for Navigation and Controls: CORRECTED ---
+# --- Sidebar for Navigation and Controls ---
 with st.sidebar:
-    # st.image("vertex-logo.png", width=200) # This line is commented out
     st.title("VERITAS")
     st.caption("Vertex Ensured Reporting & Integrity Transformation Automation Suite")
     st.markdown("---")
     user_role = get_user_role()
     st.markdown("---")
     if st.button("Logout"):
-        st.rerun() # Use st.rerun() for modern Streamlit versions
-
-# ... (the rest of the file remains the same) ...
+        # Clear session state on logout
+        for key in st.session_state.keys():
+            del st.session_state[key]
+        st.rerun()
 
 # --- Main Application Logic ---
 st.header(f"'{user_role}' Command Center")
@@ -44,7 +44,6 @@ st.header(f"'{user_role}' Command Center")
 if user_role == 'DTE Leadership':
     st.markdown("##### High-level overview of operational efficiency, program risk, and system health.")
     
-    # KPIs
     kpi_cols = st.columns(4)
     with kpi_cols[0]: st.metric("System Uptime", "99.98%", help="Availability of all VERITAS modules over the last 30 days.")
     with kpi_cols[1]: st.metric("Data Quality Score (DQS)", "97.1%", "0.8%", help="A composite score reflecting the percentage of data points passing all automated QC checks.")
@@ -53,7 +52,6 @@ if user_role == 'DTE Leadership':
 
     st.markdown("---")
     
-    # Main Dashboard Layout
     col1, col2 = st.columns((6, 4))
     with col1:
         st.subheader("Data Package Velocity & Yield")
@@ -67,7 +65,7 @@ if user_role == 'DTE Leadership':
             {"Priority": "Medium", "Alert": "Ingestion latency > 10 mins", "Owner": "DTE Ops"},
             {"Priority": "Low", "Alert": "3 reports pending signature > 48h", "Owner": "S. Director"},
         ])
-        st.dataframe(alert_df, use_container_width=True)
+        st.dataframe(alert_df, use_container_width=True, hide_index=True)
         st.subheader("QC Failure Hotspots")
         st.plotly_chart(plot_pareto_chart(data['errors']), use_container_width=True)
 
@@ -88,10 +86,8 @@ elif user_role in ['Scientist', 'Study Director']:
     tab1, tab2, tab3 = st.tabs(["🔬 Assay Analysis", "📈 Plate & Batch Analysis", "✅ My Tasks"])
     with tab1:
         col1, col2 = st.columns(2)
-        with col1:
-            st.plotly_chart(plot_dose_response(data['dose']), use_container_width=True)
-        with col2:
-            st.plotly_chart(plot_inter_assay_comparison(data['hplc']), use_container_width=True)
+        with col1: st.plotly_chart(plot_dose_response(data['dose']), use_container_width=True)
+        with col2: st.plotly_chart(plot_inter_assay_comparison(data['hplc']), use_container_width=True)
     with tab2:
         st.subheader("96-Well Plate Analysis")
         st.plotly_chart(plot_plate_heatmap(data['plate'], "Screening Plate #SP-103 - Cell Viability"), use_container_width=True)
@@ -102,7 +98,7 @@ elif user_role in ['Scientist', 'Study Director']:
             {"Type": "Discrepancy", "ID": "SMP-1005", "Details": "Negative concentration value", "Due": "2024-05-21"},
             {"Type": "E-Signature", "ID": "RPT-112", "Details": "IND Study Report v2", "Due": "2024-05-22"},
         ])
-        st.dataframe(tasks_df, use_container_width=True)
+        st.dataframe(tasks_df, use_container_width=True, hide_index=True)
 
 # --- QC ANALYST VIEW ---
 elif user_role == 'QC Analyst':
@@ -115,7 +111,7 @@ elif user_role == 'QC Analyst':
             st.subheader("Discrepancy Triage Queue")
             discrepancies = data['hplc'][~data['hplc']['analyte_concentration'].between(0, 150) | data['hplc']['peak_area'].isnull()].copy().head()
             discrepancies['Status'] = 'Open'
-            st.data_editor(discrepancies[['sample_id', 'instrument_id', 'analyte_concentration', 'Status']], use_container_width=True)
+            st.data_editor(discrepancies[['sample_id', 'instrument_id', 'analyte_concentration', 'Status']], use_container_width=True, hide_index=True)
         with col2:
             st.subheader("Live Instrument Monitoring")
             instrument_id = st.selectbox("Select Instrument for QC Monitoring", options=data['hplc']['instrument_id'].unique())
@@ -125,6 +121,5 @@ elif user_role == 'QC Analyst':
         st.subheader("Cross-Instrument Performance Analysis")
         st.info("💡 **SME Insight:** Use ANOVA (Analysis of Variance) to statistically determine if there are significant differences between instrument measurement populations. A low p-value (< 0.05) suggests that at least one instrument performs differently from the others.")
         st.plotly_chart(plot_anova_results(data['hplc'], 'retention_time', 'instrument_id'), use_container_width=True)
-
 
 display_compliance_footer()
