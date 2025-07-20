@@ -2,11 +2,10 @@
 streamlit
 pandas
 plotly
-numpy==1.26.4  # <-- LOCK to this specific version
+numpy
 scikit-learn
 pyarrow
 streamlit-option-menu
-prophet==1.1.5
-python-pptx==0.6.23
-kaleido==0.2.1
 statsforecast==1.7.0
+python-pptx==0.6.23
+kaleido==1.0.2  # <-- UPDATED to a modern version to fix the warning
