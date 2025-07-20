@@ -11,9 +11,10 @@ from utils.auth import display_compliance_footer, get_user_role
 from utils.data_generator import create_mock_hplc_data
 from utils.plotters import plot_qq, plot_ml_anomaly_results, plot_feature_importance, plot_anova_results, VERTEX_COLORS
 
+# --- Page Configuration & Sidebar: CORRECTED ---
 st.set_page_config(layout="wide", page_title="QC & Integrity Center")
 with st.sidebar:
-    st.image("vertex-logo.png", width=200)
+    # st.image("vertex-logo.png", width=200) # This line is commented out
     st.title("VERITAS")
 get_user_role()
 st.title("Module 2: QC & Integrity Center")
