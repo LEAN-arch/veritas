@@ -5,24 +5,24 @@ import numpy as np
 import time
 from datetime import datetime
 
-# Import from the new, centralized backend and UI modules
+# Import from the centralized backend modules
 from utils import plotters, data_connector as dc
 
-# THE FIX: All code is now at the top level of the script.
-# The `def render_page():` wrapper has been removed.
-
+# Set the page configuration for this specific page
 st.set_page_config(page_title="Ingestion Gateway", page_icon="📥", layout="wide")
 
 st.title("📥 Data Ingestion & Harmonization Gateway")
 st.markdown("Secure, automated entry point for all raw data files with real-time and historical monitoring.")
 
 # --- Load data and config from session state ---
+# This ensures the page uses the data loaded by the main VERITAS_app.py
 db_connection = st.session_state.get('db_connection')
 username = st.session_state.get('username', 'Unknown User')
 ingestion_history_df = st.session_state.get('ingestion_history_df', pd.DataFrame())
 
-if not db_connection:
-    st.warning("Database connection not found. Please return to the main Command Center and restart the session.")
+# Stop execution if the main app hasn't initialized the session properly
+if not db_connection or username == 'Unknown User':
+    st.warning("Session not initialized. Please start from the main VERITAS Command Center.")
     st.stop()
 
 with st.expander("ℹ️ SME Overview: The Importance of a Data Gateway"):
@@ -77,7 +77,6 @@ with col2:
                 })
                 
                 dc.write_to_audit_log(
-                    db_connection,
                     user=username,
                     action="File Ingested",
                     details=f"File '{file.name}' ingestion attempt. Status: {status}. Justification: {justification}.",
@@ -88,9 +87,13 @@ with col2:
                 progress_bar.progress((i + 1) / len(uploaded_files), text=f"Processing {file.name}...")
             
             st.success("Ingestion workflow complete.")
-            st.dataframe(pd.DataFrame(results), hide_index=True)
+            st.dataframe(pd.DataFrame(results), use_container_width=True)
         
         elif not e_signature:
              st.warning("Please provide your E-Signature to enable the ingestion button.")
     else:
         st.info("Upload files and provide your e-signature to start.")
+
+# Add the compliance footer, imported from the auth module
+from utils import auth
+auth.display_compliance_footer()
