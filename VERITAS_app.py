@@ -2,14 +2,10 @@
 import streamlit as st
 import pandas as pd
 
-# Import foundational modules for the main app
 from utils import auth, data_connector as dc, config, plotters
 
-# --- 1. Application Setup: Called only once at the top of the main script ---
 st.set_page_config(
-    page_title="VERITAS Command Center",
-    page_icon="🧪",
-    layout="wide",
+    page_title="VERITAS Command Center", page_icon="🧪", layout="wide",
     initial_sidebar_state="expanded",
     menu_items={
         'Get Help': 'https://www.vertex.com/contact-us',
@@ -17,25 +13,25 @@ st.set_page_config(
     }
 )
 
-# --- 2. Session Initialization and Data Loading (Runs once per session) ---
 if 'session_initialized' not in st.session_state:
     auth.initialize_session()
+    st.session_state.db_connection = dc.connect_to_db({"database": "PROD_DATA_WAREHOUSE"})
+    st.session_state.app_config = dc.fetch_app_config(st.session_state.db_connection)
     dc.initialize_session_data()
-    st.session_state.app_config = config.APP_CONFIG # Load config into state
 
-# --- 3. Render Universal UI Elements ---
 auth.render_main_sidebar()
 
-# --- 4. Centralized Audit Log for User Login ---
 if not st.session_state.get('login_audited', False):
+    # --- THE FIX IS HERE ---
+    # The call now explicitly names every argument for clarity and correctness.
     dc.write_to_audit_log(
+        _connection=st.session_state.db_connection,
         user=st.session_state.username,
         action="User Login",
         details=f"User logged in with the '{st.session_state.user_role}' role view."
     )
     st.session_state.login_audited = True
 
-# --- Role-Based Page Access Control and Navigation ---
 PAGES = {
     "Ingestion Gateway": "pages/1_data_ingestion_gateway.py",
     "QC & Integrity Center": "pages/2_qc_and_integrity_center.py",
@@ -59,30 +55,26 @@ for page_name in PAGE_PERMISSIONS.get(user_role, []):
     if page_name in PAGES:
         st.sidebar.page_link(PAGES[page_name], label=page_name)
 
-# --- Dashboard Rendering Functions (for the main page) ---
 def render_dte_view():
     st.markdown("##### High-level overview of operational efficiency, program risk, and system health.")
-    hplc_df = dc.fetch_hplc_data()
-    deviations_df = dc.fetch_deviations_data()
-    gantt_df = dc.fetch_gantt_data()
+    hplc_df, deviations_df, gantt_df = dc.fetch_hplc_data(), dc.fetch_deviations_data(), dc.fetch_gantt_data()
     
     kpi_cols = st.columns(4)
     active_deviations = deviations_df[deviations_df['status'] != 'Closed'].shape[0]
-    kpi_cols[0].metric("Active Deviations", active_deviations, help="Total number of open deviation investigations.")
+    kpi_cols[0].metric("Active Deviations", active_deviations)
     
     dqs_lsl = config.APP_CONFIG['process_capability']['spec_limits']['Purity']['LSL']
     dqs_score = 100 * (hplc_df['Purity'] >= dqs_lsl).mean()
-    kpi_cols[1].metric("Data Quality Score (DQS)", f"{dqs_score:.1f}%", f"{((dqs_score/100)-0.95)*100:.1f}% vs Target", help="Percentage of data passing automated checks.")
+    kpi_cols[1].metric("Data Quality Score (DQS)", f"{dqs_score:.1f}%", f"{((dqs_score/100)-0.95)*100:.1f}% vs Target")
     
     kpi_cols[2].metric("First Pass Yield (FPY)", "88.2%", "-1.5%")
     kpi_cols[3].metric("Mean Time to Resolution (MTTR)", f"{active_deviations * 1.2:.1f} Hrs", "-0.5 Hrs", delta_color="inverse")
 
     st.markdown("---")
-    
     col1, col2 = st.columns((6, 4))
     with col1:
         st.subheader("Data Package Velocity & Yield")
-        sankey_data = {'ingested': len(hplc_df), 'passed': len(hplc_df[hplc_df['Purity'] >= dqs_lsl]), 'failed': len(hplc_df[hplc_df['Purity'] < dqs_lsl])}
+        sankey_data = {'ingested': len(hplc_df), 'passed': (hplc_df['Purity'] >= dqs_lsl).sum(), 'failed': (hplc_df['Purity'] < dqs_lsl).sum()}
         st.plotly_chart(plotters.plot_kpi_sankey(sankey_data), use_container_width=True)
         st.subheader("Drug Program Timelines & Submission Risk")
         st.plotly_chart(plotters.plot_gantt_chart(gantt_df), use_container_width=True)
@@ -111,7 +103,6 @@ def render_qc_analyst_view():
     kpi_cols[1].metric("In Progress Deviations", deviations_df[deviations_df['status'] == 'In Progress'].shape[0])
     kpi_cols[2].metric("Deviations Pending QA", deviations_df[deviations_df['status'] == 'Pending QA'].shape[0])
 
-# --- Main Application Logic: Render the correct view based on role ---
 st.title("VERITAS Command Center")
 st.header(f"'{st.session_state.user_role}' View")
 st.markdown("---")
