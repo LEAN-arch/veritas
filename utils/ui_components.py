@@ -43,7 +43,7 @@ def render_lineage_timeline(df: pd.DataFrame, record_id: str):
 def render_kanban_card(card_data: pd.Series) -> bool:
     """
     Renders a single card for the Kanban board and its 'Advance' button.
-    This component is now stateless and only handles rendering.
+    This component is stateless and only handles rendering.
 
     Args:
         card_data (pd.Series): A row from the deviations DataFrame.
@@ -56,7 +56,6 @@ def render_kanban_card(card_data: pd.Series) -> bool:
     
     button_clicked = False
     
-    # Use a color-coded container for each card based on priority
     color = priority_colors.get(card_data['priority'], "#FFFFFF")
     
     with st.container(border=True):
@@ -70,7 +69,6 @@ def render_kanban_card(card_data: pd.Series) -> bool:
             unsafe_allow_html=True
         )
         
-        # Add the "Advance" button if the card is not in the final state
         current_status = card_data['status']
         if current_status != kanban_states[-1]:
             if st.button("▶️ Advance", key=f"advance_{card_data['id']}", help=f"Move from {current_status} to next stage"):
