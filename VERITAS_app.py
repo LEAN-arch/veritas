@@ -1,7 +1,6 @@
 # VERITAS_app.py
 import streamlit as st
 import pandas as pd
-
 from utils import auth, data_connector as dc, config, plotters
 
 st.set_page_config(
@@ -13,63 +12,40 @@ st.set_page_config(
     }
 )
 
-if 'session_initialized' not in st.session_state:
-    auth.initialize_session()
+# Initialize session state (user, data, etc.) once
+auth.initialize_session()
+if 'db_connection' not in st.session_state:
     st.session_state.db_connection = dc.connect_to_db({"database": "PROD_DATA_WAREHOUSE"})
     st.session_state.app_config = dc.fetch_app_config(st.session_state.db_connection)
     dc.initialize_session_data()
 
+# Render the sidebar with role switcher. Streamlit handles the page links automatically.
 auth.render_main_sidebar()
 
+# Log user login action once per session
 if not st.session_state.get('login_audited', False):
-    # --- THE FIX IS HERE ---
-    # The call now explicitly names every argument for clarity and correctness.
     dc.write_to_audit_log(
-        _connection=st.session_state.db_connection,
-        user=st.session_state.username,
-        action="User Login",
-        details=f"User logged in with the '{st.session_state.user_role}' role view."
+        _connection=st.session_state.db_connection, user=st.session_state.username,
+        action="User Login", details=f"User logged in with the '{st.session_state.user_role}' role view."
     )
     st.session_state.login_audited = True
 
-PAGES = {
-    "Ingestion Gateway": "pages/1_data_ingestion_gateway.py",
-    "QC & Integrity Center": "pages/2_qc_and_integrity_center.py",
-    "Process Capability Dashboard": "pages/3_process_capability_dashboard.py",
-    "Stability Program Dashboard": "pages/4_stability_program_dashboard.py",
-    "Regulatory Support": "pages/5_regulatory_support.py",
-    "Deviation Hub": "pages/6_deviation_hub.py",
-    "Governance & Audit Hub": "pages/7_governance_and_audit_hub.py",
-}
-
-PAGE_PERMISSIONS = {
-    'DTE Leadership': list(PAGES.keys()),
-    'Study Director': ["Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support", "Governance & Audit Hub"],
-    'Scientist': ["Ingestion Gateway", "QC & Integrity Center", "Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support"],
-    'QC Analyst': ["Ingestion Gateway", "QC & Integrity Center", "Deviation Hub", "Governance & Audit Hub", "Process Capability Dashboard"]
-}
-
-st.sidebar.markdown("## Analytical Modules")
-user_role = st.session_state.user_role
-for page_name in PAGE_PERMISSIONS.get(user_role, []):
-    if page_name in PAGES:
-        st.sidebar.page_link(PAGES[page_name], label=page_name)
+# --- THE FIX IS HERE ---
+# The manual st.page_link loop has been completely removed.
+# Streamlit will now automatically discover and display the pages from the `pages/` directory.
+# Access control is now handled by the `auth.check_page_authorization()` call within each page file.
 
 def render_dte_view():
     st.markdown("##### High-level overview of operational efficiency, program risk, and system health.")
     hplc_df, deviations_df, gantt_df = dc.fetch_hplc_data(), dc.fetch_deviations_data(), dc.fetch_gantt_data()
-    
     kpi_cols = st.columns(4)
     active_deviations = deviations_df[deviations_df['status'] != 'Closed'].shape[0]
     kpi_cols[0].metric("Active Deviations", active_deviations)
-    
     dqs_lsl = config.APP_CONFIG['process_capability']['spec_limits']['Purity']['LSL']
     dqs_score = 100 * (hplc_df['Purity'] >= dqs_lsl).mean()
     kpi_cols[1].metric("Data Quality Score (DQS)", f"{dqs_score:.1f}%", f"{((dqs_score/100)-0.95)*100:.1f}% vs Target")
-    
     kpi_cols[2].metric("First Pass Yield (FPY)", "88.2%", "-1.5%")
     kpi_cols[3].metric("Mean Time to Resolution (MTTR)", f"{active_deviations * 1.2:.1f} Hrs", "-0.5 Hrs", delta_color="inverse")
-
     st.markdown("---")
     col1, col2 = st.columns((6, 4))
     with col1:
@@ -107,6 +83,7 @@ st.title("VERITAS Command Center")
 st.header(f"'{st.session_state.user_role}' View")
 st.markdown("---")
 
+user_role = st.session_state.user_role
 if user_role == 'DTE Leadership':
     render_dte_view()
 elif user_role in ['Scientist', 'Study Director']:
