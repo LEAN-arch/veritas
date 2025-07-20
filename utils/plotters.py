@@ -50,10 +50,12 @@ def plot_anova_results(df, value_col, group_col):
 def plot_audit_timeline(df, record_id):
     """Creates a timeline of actions for a specific record."""
     record_df = df[df['Record ID'] == record_id].sort_values('Timestamp')
-    if record_df.empty:
-        return go.Figure().update_layout(title=f"No actions found for {record_id}", height=200)
     
-    # CORRECTED: 'hover_data' now uses columns that exist in the generated data.
+    # CORRECTED: Instead of returning a blank figure, return None if no data is found.
+    # This allows the calling page to provide a much clearer user message.
+    if record_df.empty:
+        return None
+    
     fig = px.timeline(
         record_df, 
         x_start="Timestamp", 
