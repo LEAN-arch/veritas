@@ -1,10 +1,10 @@
 # pages/4_stability_program_dashboard.py
 import streamlit as st
 import pandas as pd
-
+from utils import auth
 # Import from the centralized backend modules
 from utils import data_connector as dc, plotters, analysis_engine, auth
-
+auth.check_page_authorization()
 # Set the page configuration for this specific page
 st.set_page_config(page_title="Stability Dashboard", page_icon="⏳", layout="wide")
 
