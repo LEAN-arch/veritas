@@ -30,7 +30,10 @@ def render_main_sidebar():
     role_options = AUTH_CONFIG['role_options']
     
     # Use the current role from session state to set the index
-    current_role_index = role_options.index(st.session_state.user_role)
+    try:
+        current_role_index = role_options.index(st.session_state.user_role)
+    except ValueError:
+        current_role_index = 0 # Default to the first role if current role is not in options
     
     selected_role = st.sidebar.selectbox(
         "Switch Role View",
@@ -40,16 +43,23 @@ def render_main_sidebar():
         help="Switch roles to see how dashboards and permissions change."
     )
     
-    # Update the session state if the role has been changed
+    # Update the session state and rerun if the role has been changed
     if selected_role != st.session_state.user_role:
         st.session_state.user_role = selected_role
+        # Log the role change action
+        from utils.data_connector import write_to_audit_log
+        write_to_audit_log(
+            user=st.session_state.username,
+            action="Role View Changed",
+            details=f"Switched to '{selected_role}' view."
+        )
         st.rerun()
 
     st.sidebar.markdown("---")
 
     if st.sidebar.button("Reset Session / Logout"):
         # Clear the entire session state to start fresh
-        for key in st.session_state.keys():
+        for key in list(st.session_state.keys()):
             del st.session_state[key]
         st.rerun()
 
@@ -60,7 +70,7 @@ def display_compliance_footer():
     """
     st.markdown("---")
     footer_html = f"""
-    <div style="text-align: center; font-size: 0.8em; color: grey;">
+    <div style="text-align: center; font-size: 0.8em; color: grey; padding-top: 2em;">
         <p>VERITAS {APP_CONFIG['app_version']} | For Internal Vertex Use Only</p>
         <p><strong>GxP Compliance Notice:</strong> All actions are logged. Data integrity is enforced per <strong>21 CFR Part 11</strong>.</p>
     </div>
