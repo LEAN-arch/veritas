@@ -6,9 +6,10 @@ from utils.auth import display_compliance_footer, get_user_role
 from utils.data_generator import get_ingestion_history
 from utils.plotters import plot_ingestion_trend, plot_ingestion_volume
 
+# --- Page Configuration & Sidebar: CORRECTED ---
 st.set_page_config(layout="wide", page_title="Data Ingestion Gateway")
 with st.sidebar:
-    st.image("vertex-logo.png", width=200)
+    # st.image("vertex-logo.png", width=200) # This line is commented out
     st.title("VERITAS")
 get_user_role()
 st.title("Module 1: Data Ingestion & Harmonization Gateway")
