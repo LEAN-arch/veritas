@@ -27,7 +27,7 @@ def plot_kpi_sankey(data: dict) -> go.Figure:
     if not all(k in data for k in ['ingested', 'passed', 'failed']):
         return create_empty_figure("Sankey data is missing.")
 
-    passed_to_report = data['passed'] * 0.9  # 90% of passed data goes to reporting
+    passed_to_report = data['passed'] * 0.9
     
     fig = go.Figure(go.Sankey(
         node=dict(
@@ -51,10 +51,8 @@ def plot_gantt_chart(df: pd.DataFrame) -> go.Figure:
         return create_empty_figure("No Gantt chart data.")
     
     color_map = {
-        'Completed': VERTEX_COLORS['green'], 
-        'In Progress': VERTEX_COLORS['orange'], 
-        'On Track': VERTEX_COLORS['lightblue'], 
-        'Planned': VERTEX_COLORS['gray']
+        'Completed': VERTEX_COLORS['green'], 'In Progress': VERTEX_COLORS['orange'], 
+        'On Track': VERTEX_COLORS['lightblue'], 'Planned': VERTEX_COLORS['gray']
     }
     fig = px.timeline(df, x_start="Start", x_end="Finish", y="Program", color="Status", 
                       title="<b>Major Program Timelines & Submission Risk</b>", 
@@ -77,8 +75,7 @@ def plot_pareto_chart(df: pd.DataFrame) -> go.Figure:
     
     fig.update_layout(
         title='<b>Pareto Analysis of QC Failure Hotspots</b>',
-        xaxis_title='Error Type',
-        yaxis=dict(title='Frequency'),
+        xaxis_title='Error Type', yaxis=dict(title='Frequency'),
         yaxis2=dict(title='Cumulative Percentage', overlaying='y', side='right', range=[0, 105]),
         template=VERITAS_THEME, height=350
     )
@@ -110,14 +107,10 @@ def plot_historical_control_chart(df: pd.DataFrame, cqa: str, date_range: tuple)
 
 def plot_process_capability(df: pd.DataFrame, cqa: str, lsl: float, usl: float, cpk: float) -> go.Figure:
     """Displays a process capability histogram with calculated Cpk."""
-    if cqa not in df.columns:
-        return create_empty_figure(f"CQA '{cqa}' not in data.")
-        
-    data = df[cqa].dropna()
-    if data.empty:
+    if cqa not in df.columns or df[cqa].dropna().empty:
         return create_empty_figure(f"No data for {cqa}.")
     
-    mean = data.mean()
+    mean = df[cqa].mean()
     fig = px.histogram(df, x=cqa, nbins=30, title=f"<b>Process Capability for {cqa} | Cpk: {cpk:.2f}</b>")
     
     if lsl is not None: fig.add_vline(x=lsl, line_dash="solid", line_color=VERTEX_COLORS['red'], annotation_text="LSL")
@@ -132,21 +125,16 @@ def plot_stability_trend(df: pd.DataFrame, assay: str, spec_limits: dict) -> go.
     if df.empty or assay not in df.columns:
         return create_empty_figure(f"No data to plot for {assay}.")
 
-    lsl = spec_limits.get('LSL')
-    usl = spec_limits.get('USL')
+    lsl, usl = spec_limits.get('LSL'), spec_limits.get('USL')
 
     fig = go.Figure()
     fig.add_trace(go.Scatter(x=df['Timepoint (Months)'], y=df[assay], mode='lines+markers', name=assay))
     
-    if lsl is not None:
-        fig.add_trace(go.Scatter(x=df['Timepoint (Months)'], y=[lsl]*len(df), mode='lines', name='LSL', line=dict(color=VERTEX_COLORS['red'], dash='solid')))
-    if usl is not None:
-        fig.add_trace(go.Scatter(x=df['Timepoint (Months)'], y=[usl]*len(df), mode='lines', name='USL', line=dict(color=VERTEX_COLORS['red'], dash='solid')))
+    if lsl is not None: fig.add_trace(go.Scatter(x=df['Timepoint (Months)'], y=[lsl]*len(df), mode='lines', name='LSL', line=dict(color=VERTEX_COLORS['red'], dash='solid')))
+    if usl is not None: fig.add_trace(go.Scatter(x=df['Timepoint (Months)'], y=[usl]*len(df), mode='lines', name='USL', line=dict(color=VERTEX_COLORS['red'], dash='solid')))
         
     fig.update_layout(title=f"<b>Stability Trend for {assay}</b>", xaxis_title="Timepoint (Months)", yaxis_title="Value", template=VERITAS_THEME, height=400)
     return fig
-
-# --- ANOVA, Normality, and ML Plots ---
 
 def plot_anova_results(df: pd.DataFrame, value_col: str, group_col: str) -> go.Figure:
     """Creates a box plot for ANOVA analysis."""
@@ -187,8 +175,6 @@ def plot_spc_chart(df: pd.DataFrame, value_col: str) -> go.Figure:
     if df.empty or 'injection_time' not in df.columns:
          return create_empty_figure("Invalid data for SPC chart.")
     return plot_historical_control_chart(df, value_col, (df['injection_time'].min(), df['injection_time'].max()))
-
-# --- Ingestion Plots ---
 
 def plot_ingestion_trend(df: pd.DataFrame) -> go.Figure:
     """Creates a trend chart for data ingestion success rate."""
