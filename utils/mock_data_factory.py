@@ -7,13 +7,6 @@ class MockDataFactory:
     """
     A centralized factory for generating a complete, cohesive, and realistic
     set of mock data for the entire VERITAS application.
-    
-    Attributes:
-        hplc_df (pd.DataFrame): Core HPLC results data with injected anomalies.
-        deviations_df (pd.DataFrame): Deviations linked to anomalies in hplc_df.
-        stability_df (pd.DataFrame): Comprehensive stability data for multiple lots.
-        audit_df (pd.DataFrame): Rich audit trail referencing real records.
-        gantt_df (pd.DataFrame): Data for program management Gantt charts.
     """
     def __init__(self, seed=42):
         self.rng = np.random.default_rng(seed)
@@ -43,7 +36,7 @@ class MockDataFactory:
         }
         df = pd.DataFrame(data)
 
-        # --- Inject Realistic Anomalies ---
+        # Inject Realistic Anomalies
         df.loc[10, 'Purity'] = 97.8 
         df.loc[25, 'batch_id'] = np.nan
         hplc03_indices = df[df['instrument_id'] == 'HPLC-03'].index
@@ -51,6 +44,7 @@ class MockDataFactory:
         df.loc[hplc03_indices, 'Main Impurity'] += drift_factor
         df.loc[50, 'Bio-activity'] = 205.0
         
+        # Clip values to be realistic
         df['Purity'] = df['Purity'].clip(97.0, 100)
         df['Aggregate Content'] = df['Aggregate Content'].clip(0, 1)
         df['Main Impurity'] = df['Main Impurity'].clip(0, 1.0)
@@ -123,9 +117,7 @@ class MockDataFactory:
             elif action == 'E-Signature Applied':
                 details = "User signed off on report 'RPT-101' for Author Approval."
             
-            # --- THE FIX IS HERE ---
-            # The result of self.rng.integers is a numpy.int64, which timedelta dislikes.
-            # We cast it to a standard Python int() to resolve the TypeError.
+            # Cast the numpy-native integer to a standard Python int to prevent TypeError
             random_minutes = int(self.rng.integers(0, 59))
             
             log.append({
