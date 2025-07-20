@@ -78,19 +78,29 @@ with tab2:
     st.subheader("Visual Data Lineage Tracer")
     st.info("Trace the complete history of any data record, from ingestion through QC and transformation to final reporting.")
     
-    # --- ENHANCED: Find a good example record to ensure the chart is populated on first view ---
-    # Find the Record ID with the most audit entries to use as a robust default example.
+    # --- ENHANCED: Use a selectbox with a good default to prevent user error ---
+    valid_ids = sorted(audit_df['Record ID'].unique().tolist())
+    # Find a good example with multiple entries to use as the default
     good_example_id = audit_df['Record ID'].mode()[0]
-    
-    record_id = st.text_input(
-        "Enter Record ID to Trace", 
-        value=good_example_id, # Use the dynamically found good example as the default
-        help=f"Example: {good_example_id}"
+    default_index = valid_ids.index(good_example_id) if good_example_id in valid_ids else 0
+
+    record_id = st.selectbox(
+        "Select a Record ID to Trace", 
+        options=valid_ids,
+        index=default_index,
+        help="Select any Record ID from the audit log to see its complete history."
     )
+    
     if record_id:
         with st.spinner(f"Generating lineage for {record_id}..."):
             lineage_fig = plot_audit_timeline(audit_df, record_id)
-            st.plotly_chart(lineage_fig, use_container_width=True)
+            
+            # --- ENHANCED: Check the result from the plotting function and provide clear feedback ---
+            if lineage_fig is not None:
+                st.plotly_chart(lineage_fig, use_container_width=True)
+            else:
+                # This case is now less likely due to the selectbox, but is good practice
+                st.warning(f"No audit records found for the selected Record ID: **{record_id}**.")
             
 with tab3:
     st.subheader("Electronic Signature Log")
