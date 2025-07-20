@@ -4,42 +4,72 @@ import numpy as np
 from datetime import datetime, timedelta
 
 def create_mock_hplc_data(num_samples=250, drift=True):
-    """Generates highly realistic mock HPLC data with multiple studies, anomalies, and instrument drift."""
+    """
+    Generates highly realistic mock HPLC data with multiple studies, anomalies, 
+    and long-term instrument drift to simulate real-world laboratory conditions.
+    """
     np.random.seed(42)
     start_time = datetime(2024, 4, 1)
+    
+    # Base data generation
     data = {
         'sample_id': [f'SMP-{1000+i}' for i in range(num_samples)],
-        'study_id': np.random.choice(['VX-809-PK-01', 'VX-561-Tox-03', 'VX-121-Stab-02', 'VX-984-Form-05'], size=num_samples, p=[0.3, 0.3, 0.2, 0.2]),
+        'study_id': np.random.choice(
+            ['VX-809-PK-01', 'VX-561-Tox-03', 'VX-121-Stab-02', 'VX-984-Form-05'], 
+            size=num_samples, 
+            p=[0.3, 0.3, 0.2, 0.2]
+        ),
         'injection_time': [start_time + timedelta(hours=1.5*i) for i in range(num_samples)],
         'analyte_concentration': np.random.normal(loc=100, scale=8, size=num_samples),
         'peak_area': np.random.normal(loc=5000, scale=400, size=num_samples),
         'retention_time': np.random.normal(loc=2.5, scale=0.05, size=num_samples),
-        'instrument_id': np.random.choice(['HPLC-01', 'HPLC-02', 'HPLC-03', 'UPLC-01'], size=num_samples, p=[0.4, 0.3, 0.15, 0.15]),
-        'analyst': np.random.choice(['A. Turing', 'M. Curie', 'R. Franklin', 'L. Meitner'], size=num_samples)
+        'instrument_id': np.random.choice(
+            ['HPLC-01', 'HPLC-02', 'HPLC-03', 'UPLC-01'], 
+            size=num_samples, 
+            p=[0.4, 0.3, 0.15, 0.15]
+        ),
+        'analyst': np.random.choice(
+            ['A. Turing', 'M. Curie', 'R. Franklin', 'L. Meitner'], 
+            size=num_samples
+        )
     }
     df = pd.DataFrame(data)
 
+    # Introduce long-term instrument drift for HPLC-03 (a common real-world problem)
     if drift:
         hplc03_indices = df[df['instrument_id'] == 'HPLC-03'].index
         drift_factor = np.linspace(0, 0.35, len(hplc03_indices))
         df.loc[hplc03_indices, 'retention_time'] += drift_factor
 
-    df.loc[df.index[5], 'analyte_concentration'] = 180
-    df.loc[df.index[10], 'analyte_concentration'] = -12
-    df.loc[df.index[15], 'peak_area'] = np.nan
-    df.loc[df.index[25], 'peak_area'] = 7500
-    df.loc[df.index[35], 'retention_time'] = 1.8
+    # Introduce specific anomalies for QC rules and ML models to catch
+    df.loc[df.index[5], 'analyte_concentration'] = 180    # Obvious outlier
+    df.loc[df.index[10], 'analyte_concentration'] = -12   # Invalid value
+    df.loc[df.index[15], 'peak_area'] = np.nan            # Missing value
+    df.loc[df.index[25], 'peak_area'] = 7500              # Subtle ML Anomaly
+    df.loc[df.index[35], 'retention_time'] = 1.8          # Specification deviation
+    
     return df
 
 def create_plate_heatmap_data():
-    """Generates 96-well plate data with edge effects."""
+    """
+    Generates 96-well plate data with simulated edge effects, a common
+    experimental artifact in high-throughput screening.
+    """
     data = np.random.rand(8, 12) * 100 + 20
-    data[0, :] -= 15; data[-1, :] -= 15; data[:, 0] -= 15; data[:, -1] -= 15
+    # Apply edge effect: outer rows/columns have lower values
+    data[0, :] -= 15
+    data[-1, :] -= 15
+    data[:, 0] -= 15
+    data[:, -1] -= 15
+    # Ensure data stays within a reasonable range
     data = np.clip(data, 0, 150)
     return pd.DataFrame(data, index=[chr(65+i) for i in range(8)], columns=range(1, 13))
 
 def create_mock_audit_trail(num_entries=200):
-    """Generates a rich, filterable audit trail."""
+    """
+    Generates a rich, filterable audit trail that simulates various system
+    and user actions, compliant with 21 CFR Part 11 requirements.
+    """
     users = ['DTE-System', 'A. Turing', 'R. Franklin', 'QA.Bot', 'M. Curie', 'S. Director', 'Admin']
     actions = ['File Ingested', 'QC Rule Applied', 'Data Point Flagged', 'Discrepancy Resolved', 'Report Generated', 'E-Signature Applied', 'User Login', 'Data Exported', 'Permission Changed']
     records = [f'SMP-{np.random.randint(1000, 1250)}' for _ in range(num_entries)]
@@ -60,14 +90,27 @@ def create_mock_audit_trail(num_entries=200):
     return pd.DataFrame(log)
     
 def get_program_gantt_data():
-    data = [dict(Program="VX-770 (CFTR)", Start='2023-01-15', Finish='2023-06-30', Status='Completed', Risk='Low'), dict(Program="VX-809 (CFTR)", Start='2023-03-01', Finish='2023-09-15', Status='Completed', Risk='Low'), dict(Program="VX-561 (AATD)", Start='2023-07-01', Finish='2024-01-20', Status='In Progress', Risk='Medium'), dict(Program="VX-121 (Pain)", Start='2023-10-10', Finish='2024-05-30', Status='In Progress', Risk='High'), dict(Program="VX-984 (DNA Repair)", Start='2024-01-05', Finish='2024-08-01', Status='On Track', Risk='Medium'), dict(Program="NextGen Gene Editing", Start='2024-03-01', Finish='2024-12-31', Status='Planned', Risk='Low')]
+    """Generates mock data for the program management Gantt chart."""
+    data = [
+        dict(Program="VX-770 (CFTR)", Start='2023-01-15', Finish='2023-06-30', Status='Completed', Risk='Low'),
+        dict(Program="VX-809 (CFTR)", Start='2023-03-01', Finish='2023-09-15', Status='Completed', Risk='Low'),
+        dict(Program="VX-561 (AATD)", Start='2023-07-01', Finish='2024-01-20', Status='In Progress', Risk='Medium'),
+        dict(Program="VX-121 (Pain)", Start='2023-10-10', Finish='2024-05-30', Status='In Progress', Risk='High'),
+        dict(Program="VX-984 (DNA Repair)", Start='2024-01-05', Finish='2024-08-01', Status='On Track', Risk='Medium'),
+        dict(Program="NextGen Gene Editing", Start='2024-03-01', Finish='2024-12-31', Status='Planned', Risk='Low'),
+    ]
     return pd.DataFrame(data)
 
 def get_qc_error_data():
-    errors = {'Out of Spec Result': 45, 'Missing Metadata': 22, 'Instrument Drift': 15, 'Invalid File Format': 8, 'Analyst Entry Error': 5, 'Checksum Mismatch': 3}
+    """Generates mock data for the QC failure Pareto chart."""
+    errors = {
+        'Out of Spec Result': 45, 'Missing Metadata': 22, 'Instrument Drift': 15,
+        'Invalid File Format': 8, 'Analyst Entry Error': 5, 'Checksum Mismatch': 3
+    }
     return pd.DataFrame(list(errors.items()), columns=['Error Type', 'Frequency']).sort_values(by='Frequency', ascending=False)
 
 def get_ingestion_history():
+    """Generates data for historical ingestion metrics trends."""
     dates = pd.date_range(end=datetime.now(), periods=30, freq='D')
     success_rate = 95 + np.random.randn(30).cumsum() * 0.1
     success_rate = np.clip(success_rate, 90, 99.8)
@@ -75,6 +118,7 @@ def get_ingestion_history():
     return pd.DataFrame({'Date': dates, 'Success Rate (%)': success_rate, 'Files Processed': files_processed})
 
 def create_dose_response_data():
+    """Generates classic sigmoidal dose-response curve data."""
     doses = np.logspace(-9, -4, 15)
     ec50 = 1e-7
     response = 100 / (1 + (ec50 / doses))
