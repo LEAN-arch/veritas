@@ -1,154 +1,122 @@
-# pages/2_QC_&_Integrity_Center.py
+# pages/2_qc_and_integrity_center.py
 import streamlit as st
 import pandas as pd
-import time
-from sklearn.ensemble import IsolationForest
 import numpy as np
-import plotly.express as px
-from scipy import stats
 
-from utils.auth import display_compliance_footer, get_user_role
-from utils.data_generator import create_mock_hplc_data
-from utils.plotters import plot_qq, plot_ml_anomaly_results, plot_anova_results
+# Import from the new, centralized backend and UI modules
+from utils import qc_engine, plotters
 
-def apply_qc_rules(df, rules_config):
+def render_page():
     """
-    Applies a set of deterministic rules to a dataframe and returns a report of discrepancies.
-    This function is the core of the rule-based QC engine.
+    Renders the QC & Integrity Center page.
     """
-    discrepancies = []
-    
-    # Rule 1: Check for any missing (null) values in any column
-    if rules_config['check_nulls']:
-        nulls = df[df.isnull().any(axis=1)]
-        for index, row in nulls.iterrows():
-            discrepancies.append({
-                'sample_id': row['sample_id'], 
-                'Issue': 'Missing Value', 
-                'Details': f"Null found in column(s): {row.index[row.isnull()].tolist()}"
-            })
-            
-    # Rule 2: Check for physically impossible negative concentration values
-    if rules_config['check_negatives']:
-        negatives = df[df['analyte_concentration'] < 0]
-        for index, row in negatives.iterrows():
-            discrepancies.append({
-                'sample_id': row['sample_id'], 
-                'Issue': 'Negative Value', 
-                'Details': f"Analyte concentration is {row['analyte_concentration']:.2f}"
-            })
+    st.title("🔬 QC & Integrity Center")
+    st.markdown("A suite of advanced tools for data quality validation and anomaly detection.")
 
-    # Rule 3: Check if retention time is within the validated method's specification
-    if rules_config['check_retention_range']:
-        oor = df[~df['retention_time'].between(2.4, 2.8)]
-        for index, row in oor.iterrows():
-             discrepancies.append({
-                'sample_id': row['sample_id'], 
-                'Issue': 'Out of Spec', 
-                'Details': f"Retention time is {row['retention_time']:.2f}, outside 2.4-2.8 min spec."
-            })
-            
-    return pd.DataFrame(discrepancies) if discrepancies else pd.DataFrame(columns=['sample_id', 'Issue', 'Details'])
+    # --- Load data and config from session state ---
+    hplc_df = st.session_state.get('hplc_df', pd.DataFrame())
+    app_config = st.session_state.get('app_config', {})
 
-
-# --- Page Configuration and Sidebar ---
-st.set_page_config(layout="wide", page_title="QC & Integrity Center", page_icon="🧪")
-with st.sidebar:
-    st.title("VERITAS")
-    get_user_role()
-
-# --- Page Header ---
-st.title("Module 2: QC & Integrity Center")
-st.markdown("A suite of advanced tools for statistical process control, data quality validation, and anomaly detection.")
-
-# --- Data Loading and Selection ---
-@st.cache_data
-def load_qc_data(): return create_mock_hplc_data(250)
-df = load_qc_data()
-
-study_id = st.sidebar.selectbox("Select Study for QC", options=df['study_id'].unique(), key="qc_study_selector")
-selected_df = df[df['study_id'] == study_id].copy()
-
-# --- Main Tabs for different QC workflows ---
-tab1, tab2, tab3, tab4 = st.tabs(["📋 **Rule-Based QC**", "📊 **Statistical Deep Dive**", "🤖 **ML Anomaly Detection**", "🔬 **Cross-Instrument Analysis**"])
-
-with tab1:
-    st.subheader("Automated Rule-Based Quality Control")
-    col1, col2 = st.columns([1, 2])
-    
-    with col1:
-        st.markdown("#### Configure QC Rules")
-        rules_config = {
-            'check_nulls': st.checkbox("Check for missing values", value=True),
-            'check_negatives': st.checkbox("Check for negative concentrations", value=True),
-            'check_retention_range': st.checkbox("Check retention time spec (2.4-2.8 min)", value=True),
-        }
-        if st.button("▶️ Execute QC Analysis", type="primary"):
-            st.session_state['discrepancy_report'] = apply_qc_rules(selected_df, rules_config)
-            st.session_state['qc_run_complete'] = True
-            
-    with col2:
-        st.markdown("#### QC Analysis Results")
-        if st.session_state.get('qc_run_complete', False):
-            report_df = st.session_state['discrepancy_report']
-            total_issues = len(report_df)
-            total_points = selected_df.shape[0] * selected_df.shape[1]
-            dqs = 100 * (1 - (total_issues / total_points))
-            
-            st.metric("Data Quality Score (DQS)", f"{dqs:.2f}%", f"-{total_issues} issues found")
-            
-            if not report_df.empty:
-                st.error(f"Found {len(report_df)} discrepancies requiring attention.")
-                st.dataframe(report_df, use_container_width=True, hide_index=True)
-            else:
-                st.success("Congratulations! No rule-based discrepancies were found in this dataset.")
-        else:
-            st.info("Configure rules and click 'Execute QC Analysis' to see results.")
-
-with tab2:
-    st.subheader("Statistical Deep Dive")
-    param = st.selectbox("Select Parameter", options=['analyte_concentration', 'peak_area', 'retention_time'])
-    data_to_test = selected_df[param].dropna()
-    
-    col1, col2 = st.columns(2)
-    with col1:
-        stat, p_value = stats.shapiro(data_to_test)
-        st.markdown("#### Shapiro-Wilk Normality Test")
-        st.metric("P-value", f"{p_value:.4f}")
-        if p_value > 0.05: st.success("Conclusion: Data appears to be normally distributed (p > 0.05).")
-        else: st.warning("Conclusion: Data does not appear to be normally distributed (p <= 0.05).")
-    with col2:
-        st.markdown("#### Descriptive Statistics")
-        st.dataframe(data_to_test.describe())
+    if hplc_df.empty or not app_config:
+        st.warning("Data not loaded. Please return to the main Command Center.")
+        return
         
-    col1, col2 = st.columns(2)
-    with col1:
-        fig = px.histogram(data_to_test, marginal="box", title=f"Distribution of {param}")
-        st.plotly_chart(fig, use_container_width=True)
-    with col2:
-        fig = plot_qq(data_to_test)
-        st.plotly_chart(fig, use_container_width=True)
+    # --- Sidebar for Data Selection ---
+    st.sidebar.markdown("## QC Data Selection")
+    study_id = st.sidebar.selectbox("Select Study for QC", options=sorted(hplc_df['study_id'].unique()), key="qc_study_selector")
+    selected_df = hplc_df[hplc_df['study_id'] == study_id].copy()
+    st.sidebar.info(f"{len(selected_df)} data points in study '{study_id}'.")
 
-with tab3:
-    st.subheader("Machine Learning-Powered Anomaly Detection")
-    col1, col2 = st.columns([1, 2])
-    with col1:
-        contamination = st.slider("Anomaly Sensitivity", 0.01, 0.2, 0.05, 0.01, help="The estimated proportion of outliers in the data.")
+    # --- Main Tabs for different QC workflows ---
+    tab1, tab2, tab3 = st.tabs(["📋 **Rule-Based QC**", "📊 **Statistical Deep Dive**", "🤖 **ML Anomaly Detection**"])
+
+    with tab1:
+        st.subheader("Automated Rule-Based Quality Control")
+        col1, col2 = st.columns([1, 2])
+        
+        with col1:
+            st.markdown("#### Configure QC Rules")
+            rules_config = {
+                'check_nulls': st.checkbox("Check for missing values", value=True),
+                'check_negatives': st.checkbox("Check for negative values", value=True),
+                'check_spec_limits': st.checkbox("Check against CQA specifications", value=True),
+            }
+            if st.button("▶️ Execute QC Analysis", type="primary"):
+                with st.spinner("Running QC checks..."):
+                    # Call the backend QC engine
+                    discrepancy_report = qc_engine.apply_qc_rules(selected_df, rules_config, app_config)
+                    st.session_state['discrepancy_report'] = discrepancy_report
+        
+        with col2:
+            st.markdown("#### QC Analysis Results")
+            if 'discrepancy_report' in st.session_state:
+                report_df = st.session_state['discrepancy_report']
+                st.metric("Discrepancies Found", len(report_df))
+                
+                if not report_df.empty:
+                    st.error(f"Found {len(report_df)} issues requiring attention.")
+                    st.dataframe(report_df, use_container_width=True, hide_index=True)
+                else:
+                    st.success("Congratulations! No rule-based discrepancies were found in this dataset.")
+            else:
+                st.info("Configure rules and click 'Execute QC Analysis' to see results.")
+
+    with tab2:
+        st.subheader("Statistical Deep Dive")
+        numeric_cols = selected_df.select_dtypes(include=np.number).columns.tolist()
+        param = st.selectbox("Select Parameter", options=numeric_cols)
+        data_to_test = selected_df[param].dropna()
+        
+        col1, col2 = st.columns(2)
+        with col1:
+            st.markdown("#### Shapiro-Wilk Normality Test")
+            # Call backend analysis engine
+            normality_results = qc_engine.perform_normality_test(data_to_test)
+            if normality_results['p_value'] is not None:
+                st.metric("P-value", f"{normality_results['p_value']:.4f}")
+                if normality_results['p_value'] > 0.05:
+                    st.success(normality_results['conclusion'])
+                else:
+                    st.warning(normality_results['conclusion'])
+            else:
+                st.info(normality_results['conclusion'])
+        with col2:
+            st.markdown("#### Descriptive Statistics")
+            st.dataframe(data_to_test.describe())
+            
+        st.plotly_chart(plotters.plot_qq(data_to_test), use_container_width=True)
+
+    with tab3:
+        st.subheader("Machine Learning-Powered Anomaly Detection")
+        st.info("Use an Isolation Forest model to find unusual data points in 2D space.")
+        
+        col1, col2, col3 = st.columns(3)
+        numeric_cols = selected_df.select_dtypes(include=np.number).columns.tolist()
+        with col1:
+            x_col = st.selectbox("Select X-axis variable", numeric_cols, index=numeric_cols.index('Purity') if 'Purity' in numeric_cols else 0)
+        with col2:
+            y_col = st.selectbox("Select Y-axis variable", numeric_cols, index=numeric_cols.index('Bio-activity') if 'Bio-activity' in numeric_cols else 1)
+        with col3:
+            contamination = st.slider("Anomaly Sensitivity", 0.01, 0.2, 0.05, 0.01, help="The estimated proportion of outliers in the data.")
+        
         if st.button("🤖 Find Anomalies", type="primary"):
-            numeric_cols = selected_df.select_dtypes(include=np.number).dropna()
-            model = IsolationForest(contamination=contamination, random_state=42)
-            preds = model.fit_predict(numeric_cols)
-            st.session_state['ml_preds'] = preds
-            st.session_state['ml_cols'] = numeric_cols
-    with col2:
-        if 'ml_preds' in st.session_state:
-            st.plotly_chart(plot_ml_anomaly_results(st.session_state['ml_cols'], st.session_state['ml_preds']), use_container_width=True)
+            # Call backend ML engine
+            predictions, data_fitted = qc_engine.run_anomaly_detection(selected_df, x_col, y_col, contamination)
+            st.session_state['ml_preds'] = predictions
+            st.session_state['ml_data_fitted'] = data_fitted
+            st.session_state['ml_x_col'] = x_col
+            st.session_state['ml_y_col'] = y_col
+
+        if 'ml_preds' in st.session_state and st.session_state['ml_preds'] is not None:
+            st.plotly_chart(plotters.plot_ml_anomaly_results(
+                st.session_state['ml_data_fitted'], 
+                st.session_state['ml_x_col'], 
+                st.session_state['ml_y_col'], 
+                st.session_state['ml_preds']), 
+                use_container_width=True
+            )
             st.info(f"Analysis complete. Found {(st.session_state['ml_preds'] == -1).sum()} potential anomalies for review.")
 
-with tab4:
-    st.subheader("Cross-Instrument Performance & Bias Detection")
-    st.info("💡 **SME Insight:** Ensuring consistency across different instruments is critical for pooling data and validating methods. Use ANOVA to detect if one instrument is systematically biased (i.e., consistently measures higher or lower) compared to others.")
-    value_to_compare = st.selectbox("Select Measurement for Comparison", options=['retention_time', 'peak_area'])
-    st.plotly_chart(plot_anova_results(df, value_to_compare, 'instrument_id'), use_container_width=True)
-
-display_compliance_footer()
+# --- This check ensures the page is run correctly from the main app ---
+if __name__ == "__main__":
+    st.error("This page should be run from the main VERITAS Command Center app.")
