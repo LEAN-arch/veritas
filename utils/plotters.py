@@ -53,6 +53,7 @@ def plot_audit_timeline(df, record_id):
     if record_df.empty:
         return go.Figure().update_layout(title=f"No actions found for {record_id}", height=200)
     
+    # CORRECTED: 'hover_data' now uses columns that exist in the generated data.
     fig = px.timeline(
         record_df, 
         x_start="Timestamp", 
@@ -60,12 +61,34 @@ def plot_audit_timeline(df, record_id):
         y="User", 
         color="Action",
         title=f"<b>Timeline of Actions for Record: {record_id}</b>",
-        hover_data=['Details', '21 CFR 11 Justification']
+        hover_data=['Old Value', 'New Value', '21 CFR 11 Justification']
     )
     fig.update_yaxes(categoryorder="total ascending")
     fig.update_layout(height=400)
     return fig
+
+def plot_spc_chart(df, value_col, time_col='injection_time'):
+    """
+    Creates a Statistical Process Control (SPC) chart. 
+    This function was re-added to fix the ImportError.
+    """
+    df_sorted = df.sort_values(by=time_col).reset_index()
     
+    mean = df_sorted[value_col].mean()
+    std_dev = df_sorted[value_col].std()
+    ucl = mean + 3 * std_dev
+    lcl = mean - 3 * std_dev
+    
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(x=df_sorted[time_col], y=df_sorted[value_col], mode='lines+markers', name='Measurement', marker_color=VERTEX_COLORS['blue']))
+    
+    fig.add_hline(y=mean, line_dash="dash", line_color="green", annotation_text="Center Line (CL)")
+    fig.add_hline(y=ucl, line_dash="dot", line_color="red", annotation_text="Upper Control Limit (UCL)")
+    fig.add_hline(y=lcl, line_dash="dot", line_color="red", annotation_text="Lower Control Limit (LCL)")
+    
+    fig.update_layout(title=f'<b>SPC Chart for {value_col}</b>', xaxis_title='Time', yaxis_title='Value', height=300)
+    return fig
+
 def plot_sankey_flow():
     """Creates a Sankey diagram for the DTE Leadership dashboard."""
     fig = go.Figure(go.Sankey(
