@@ -7,16 +7,16 @@ from utils.auth import get_user_role, display_compliance_footer
 from utils.data_generator import get_program_gantt_data, create_mock_hplc_data, get_qc_error_data
 from utils.plotters import plot_sankey_flow, plot_gantt_chart, plot_spc_chart, plot_pareto_chart, VERTEX_COLORS
 
-# --- Page Configuration ---
+# --- Page Configuration (CORRECTED) ---
 st.set_page_config(
     page_title="VERITAS Command Center",
-    page_icon="V_logo.png", # Placeholder, replace with actual Vertex logo path
+    page_icon="🧪",  # Changed from "V_logo.png" to a standard emoji
     layout="wide",
     initial_sidebar_state="expanded"
 )
 
-# --- Logo and Header ---
-st.image("vertex-logo.png", width=250)
+# --- Logo and Header (CORRECTED) ---
+# st.image("vertex-logo.png", width=250) # Commented out this line to prevent the error
 st.markdown("<h1 style='color: {};'>VERITAS Command Center</h1>".format(VERTEX_COLORS['blue']), unsafe_allow_html=True)
 st.markdown("Automated QC, Reporting, and Data Integrity for Pre-Clinical Research")
 st.markdown("---")
