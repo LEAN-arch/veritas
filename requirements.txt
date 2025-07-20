@@ -9,3 +9,4 @@ streamlit-option-menu
 prophet==1.1.5
 python-pptx==0.6.23
 kaleido==0.2.1
+statsforecast==1.7.0
