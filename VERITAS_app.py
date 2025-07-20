@@ -40,17 +40,17 @@ if not st.session_state.get('login_audited', False):
     )
     st.session_state.login_audited = True
 
-# --- THE FIX: Role-Based Page Access Control ---
-# We now store a tuple: (Display Name, Exact File Path)
-# This removes the need for fragile string manipulation.
+# --- THE FINAL FIX: Corrected Page Paths ---
+# The path for st.page_link should be the filename *within* the pages directory.
+# The "pages/" prefix must be removed.
 PAGES = {
-    "Ingestion Gateway": "pages/1_data_ingestion_gateway.py",
-    "QC & Integrity Center": "pages/2_qc_and_integrity_center.py",
-    "Process Capability Dashboard": "pages/3_process_capability_dashboard.py",
-    "Stability Program Dashboard": "pages/4_stability_program_dashboard.py",
-    "Regulatory Support": "pages/5_regulatory_support.py",
-    "Deviation Hub": "pages/6_deviation_hub.py",
-    "Governance & Audit Hub": "pages/7_governance_and_audit_hub.py",
+    "Ingestion Gateway": "1_data_ingestion_gateway.py",
+    "QC & Integrity Center": "2_qc_and_integrity_center.py",
+    "Process Capability Dashboard": "3_process_capability_dashboard.py",
+    "Stability Program Dashboard": "4_stability_program_dashboard.py",
+    "Regulatory Support": "5_regulatory_support.py",
+    "Deviation Hub": "6_deviation_hub.py",
+    "Governance & Audit Hub": "7_governance_and_audit_hub.py",
 }
 
 PAGE_PERMISSIONS = {
@@ -65,7 +65,7 @@ st.sidebar.markdown("## Analytical Modules")
 user_role = st.session_state.user_role
 for page_name in PAGE_PERMISSIONS.get(user_role, []):
     if page_name in PAGES:
-        # Directly use the correct file path from the PAGES dictionary
+        # Directly use the correct, relative file path from the PAGES dictionary
         st.sidebar.page_link(PAGES[page_name], label=page_name)
 
 # --- Dashboard Rendering Functions (for the main page) ---
