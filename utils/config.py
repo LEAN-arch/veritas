@@ -22,11 +22,22 @@ VERITAS_THEME = go.layout.Template(
 
 AUTH_CONFIG = {
     "role_options": ['DTE Leadership', 'Study Director', 'QC Analyst', 'Scientist'],
-    "default_role": "DTE Leadership"
+    "default_role": "DTE Leadership",
+    # --- THE FIX IS HERE ---
+    # This dictionary defines which roles can access which page file.
+    "page_permissions": {
+        "1_data_ingestion_gateway.py": ['Scientist', 'QC Analyst', 'DTE Leadership'],
+        "2_qc_and_integrity_center.py": ['Scientist', 'QC Analyst', 'DTE Leadership'],
+        "3_process_capability_dashboard.py": ['Study Director', 'Scientist', 'QC Analyst', 'DTE Leadership'],
+        "4_stability_program_dashboard.py": ['Study Director', 'Scientist', 'DTE Leadership'],
+        "5_regulatory_support.py": ['Study Director', 'Scientist', 'DTE Leadership'],
+        "6_deviation_hub.py": ['QC Analyst', 'DTE Leadership'],
+        "7_governance_and_audit_hub.py": ['Study Director', 'QC Analyst', 'DTE Leadership']
+    }
 }
 
 APP_CONFIG = {
-    "app_version": "v6.0 (Stable & Corrected)",
+    "app_version": "v8.0 (Final & Stable)",
     "process_capability": {
         "cpk_target": 1.33,
         "available_cqas": ["Purity", "Aggregate Content", "Main Impurity", "Bio-activity"],
