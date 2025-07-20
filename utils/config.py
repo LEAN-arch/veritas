@@ -32,7 +32,6 @@ VERITAS_THEME = go.layout.Template(
 )
 
 # 2. Authentication and Roles
-# Configuration for user roles and permissions.
 AUTH_CONFIG = {
     "role_options": ['DTE Leadership', 'Study Director', 'QC Analyst', 'Scientist'],
     "default_role": "DTE Leadership"
@@ -40,14 +39,14 @@ AUTH_CONFIG = {
 
 # 3. Application-Specific Business Logic and Parameters
 APP_CONFIG = {
-    "app_version": "v4.0 (Optimized)",
+    "app_version": "v5.0 (Stable)",
     "process_capability": {
         "cpk_target": 1.33,
         "available_cqas": ["Purity", "Aggregate Content", "Main Impurity", "Bio-activity"],
         "spec_limits": {
             "Purity": {"LSL": 98.0, "USL": 102.0},
             "Aggregate Content": {"LSL": 0.0, "USL": 1.0},
-            "Main Impurity": {"LSL": 0.0, "USL": 0.5},
+            "Main Impurity": {"LSL": 0.1, "USL": 0.5},
             "Bio-activity": {"LSL": 90.0, "USL": 110.0}
         }
     },
@@ -65,19 +64,11 @@ APP_CONFIG = {
     },
     "audit_trail": {
         "action_icons": {
-            "User Login": "👤", 
-            "Data Fetched": "🔍", 
-            "Report Generated": "📄", 
-            "Deviation Status Changed": "🔄", 
-            "Stability Plot Viewed": "📈", 
-            "E-Signature Applied": "✍️", 
-            "Data Exported": "📤", 
-            "Configuration Changed": "⚙️",
-            "File Ingested": "📥",
-            "QC Rule Applied": "🔬",
-            "Data Point Flagged": "🚩",
-            "Discrepancy Resolved": "✅",
-            "Permission Changed": "🔐"
+            "User Login": "👤", "Data Fetched": "🔍", "Report Generated": "📄", 
+            "Deviation Status Changed": "🔄", "Stability Plot Viewed": "📈", 
+            "E-Signature Applied": "✍️", "Data Exported": "📤", "Configuration Changed": "⚙️",
+            "File Ingested": "📥", "QC Rule Applied": "🔬", "Data Point Flagged": "🚩",
+            "Discrepancy Resolved": "✅", "Permission Changed": "🔐"
         }
     }
 }
