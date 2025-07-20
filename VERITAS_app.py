@@ -3,12 +3,9 @@ import streamlit as st
 import pandas as pd
 
 # Import foundational modules for the main app
-from utils import auth, data_connector as dc, config
+from utils import auth, data_connector as dc, config, plotters
 
-# Import the plotters to be used in the main dashboard
-from utils.plotters import plot_kpi_sankey, plot_gantt_chart, plot_pareto_chart
-
-# --- 1. Application Setup: Called only once ---
+# --- 1. Application Setup: Called only once at the top of the main script ---
 st.set_page_config(
     page_title="VERITAS Command Center",
     page_icon="🧪",
@@ -20,12 +17,11 @@ st.set_page_config(
     }
 )
 
-# --- 2. Session Initialization and Data Loading ---
+# --- 2. Session Initialization and Data Loading (Runs once per session) ---
 if 'session_initialized' not in st.session_state:
     auth.initialize_session()
-    st.session_state.db_connection = dc.connect_to_db({"database": "PROD_DATA_WAREHOUSE"})
-    st.session_state.app_config = dc.fetch_app_config(st.session_state.db_connection)
     dc.initialize_session_data()
+    st.session_state.app_config = config.APP_CONFIG # Load config into state
 
 # --- 3. Render Universal UI Elements ---
 auth.render_main_sidebar()
@@ -33,53 +29,48 @@ auth.render_main_sidebar()
 # --- 4. Centralized Audit Log for User Login ---
 if not st.session_state.get('login_audited', False):
     dc.write_to_audit_log(
-        st.session_state.db_connection,
         user=st.session_state.username,
         action="User Login",
-        details=f"User logged in and was assigned the '{st.session_state.user_role}' role view."
+        details=f"User logged in with the '{st.session_state.user_role}' role view."
     )
     st.session_state.login_audited = True
 
-# --- THE FINAL FIX: Corrected Page Paths ---
-# The path for st.page_link should be the filename *within* the pages directory.
-# The "pages/" prefix must be removed.
+# --- Role-Based Page Access Control and Navigation ---
 PAGES = {
-    "Ingestion Gateway": "1_data_ingestion_gateway.py",
-    "QC & Integrity Center": "2_qc_and_integrity_center.py",
-    "Process Capability Dashboard": "3_process_capability_dashboard.py",
-    "Stability Program Dashboard": "4_stability_program_dashboard.py",
-    "Regulatory Support": "5_regulatory_support.py",
-    "Deviation Hub": "6_deviation_hub.py",
-    "Governance & Audit Hub": "7_governance_and_audit_hub.py",
+    "Ingestion Gateway": "pages/1_data_ingestion_gateway.py",
+    "QC & Integrity Center": "pages/2_qc_and_integrity_center.py",
+    "Process Capability Dashboard": "pages/3_process_capability_dashboard.py",
+    "Stability Program Dashboard": "pages/4_stability_program_dashboard.py",
+    "Regulatory Support": "pages/5_regulatory_support.py",
+    "Deviation Hub": "pages/6_deviation_hub.py",
+    "Governance & Audit Hub": "pages/7_governance_and_audit_hub.py",
 }
 
 PAGE_PERMISSIONS = {
     'DTE Leadership': list(PAGES.keys()),
     'Study Director': ["Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support", "Governance & Audit Hub"],
     'Scientist': ["Ingestion Gateway", "QC & Integrity Center", "Process Capability Dashboard", "Stability Program Dashboard", "Regulatory Support"],
-    'QC Analyst': ["Ingestion Gateway", "QC & Integrity Center", "Deviation Hub", "Governance & Audit Hub"]
+    'QC Analyst': ["Ingestion Gateway", "QC & Integrity Center", "Deviation Hub", "Governance & Audit Hub", "Process Capability Dashboard"]
 }
 
-# --- Dynamic Page Links based on Role ---
 st.sidebar.markdown("## Analytical Modules")
 user_role = st.session_state.user_role
 for page_name in PAGE_PERMISSIONS.get(user_role, []):
     if page_name in PAGES:
-        # Directly use the correct, relative file path from the PAGES dictionary
         st.sidebar.page_link(PAGES[page_name], label=page_name)
 
 # --- Dashboard Rendering Functions (for the main page) ---
 def render_dte_view():
     st.markdown("##### High-level overview of operational efficiency, program risk, and system health.")
-    hplc_df = dc.fetch_hplc_data(st.session_state.db_connection)
+    hplc_df = dc.fetch_hplc_data()
     deviations_df = dc.fetch_deviations_data()
-    gantt_df = dc.fetch_gantt_data(st.session_state.db_connection)
+    gantt_df = dc.fetch_gantt_data()
     
     kpi_cols = st.columns(4)
     active_deviations = deviations_df[deviations_df['status'] != 'Closed'].shape[0]
     kpi_cols[0].metric("Active Deviations", active_deviations, help="Total number of open deviation investigations.")
     
-    dqs_lsl = config.APP_CONFIG.get('process_capability', {}).get('spec_limits', {}).get('Purity', {}).get('LSL', 98.0)
+    dqs_lsl = config.APP_CONFIG['process_capability']['spec_limits']['Purity']['LSL']
     dqs_score = 100 * (hplc_df['Purity'] >= dqs_lsl).mean()
     kpi_cols[1].metric("Data Quality Score (DQS)", f"{dqs_score:.1f}%", f"{((dqs_score/100)-0.95)*100:.1f}% vs Target", help="Percentage of data passing automated checks.")
     
@@ -92,20 +83,20 @@ def render_dte_view():
     with col1:
         st.subheader("Data Package Velocity & Yield")
         sankey_data = {'ingested': len(hplc_df), 'passed': len(hplc_df[hplc_df['Purity'] >= dqs_lsl]), 'failed': len(hplc_df[hplc_df['Purity'] < dqs_lsl])}
-        st.plotly_chart(plot_kpi_sankey(sankey_data), use_container_width=True)
+        st.plotly_chart(plotters.plot_kpi_sankey(sankey_data), use_container_width=True)
         st.subheader("Drug Program Timelines & Submission Risk")
-        st.plotly_chart(plot_gantt_chart(gantt_df), use_container_width=True)
+        st.plotly_chart(plotters.plot_gantt_chart(gantt_df), use_container_width=True)
     with col2:
         st.subheader("QC Failure Hotspots (from Deviations)")
         if not deviations_df.empty:
             error_data = pd.DataFrame(deviations_df['title'].str.extract(r'(OOS|Drift|Breach|Contamination|Missing)')[0].value_counts()).reset_index()
             error_data.columns = ['Error Type', 'Frequency']
-            st.plotly_chart(plot_pareto_chart(error_data), use_container_width=True)
+            st.plotly_chart(plotters.plot_pareto_chart(error_data), use_container_width=True)
 
 def render_scientist_director_view():
     st.markdown("##### Overview of key programs and links to analytical modules.")
     st.info("💡 **Navigate to specialized modules using the sidebar on the left.**")
-    hplc_df = dc.fetch_hplc_data(st.session_state.db_connection)
+    hplc_df = dc.fetch_hplc_data()
     kpi_cols = st.columns(3)
     kpi_cols[0].metric("Total Active Studies", len(hplc_df['study_id'].unique()))
     kpi_cols[1].metric("Upcoming Stability Pulls", "12 Lots")
@@ -120,7 +111,7 @@ def render_qc_analyst_view():
     kpi_cols[1].metric("In Progress Deviations", deviations_df[deviations_df['status'] == 'In Progress'].shape[0])
     kpi_cols[2].metric("Deviations Pending QA", deviations_df[deviations_df['status'] == 'Pending QA'].shape[0])
 
-# --- 6. Main Application Logic: Render the correct view based on role ---
+# --- Main Application Logic: Render the correct view based on role ---
 st.title("VERITAS Command Center")
 st.header(f"'{st.session_state.user_role}' View")
 st.markdown("---")
